@@ -1,0 +1,17 @@
+all:  monkey-test.so
+include ../Make.common
+
+CC	= @echo "  CC   $(_PATH)/$@"; $CC
+CC_QUIET= @echo -n; $CC
+CFLAGS	= $CFLAGS
+LDFLAGS = $LDFLAGS -llua
+DEFS    = $DEFS
+OBJECTS = test.o
+
+-include $(OBJECTS:.o=.d)
+
+mk_passwd:
+	@(cd tools && $(MAKE) && cd ..)
+
+monkey-test.so: $(OBJECTS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(DEFS) -shared -o $@ $^ -lc
