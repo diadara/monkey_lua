@@ -34,11 +34,32 @@ MONKEY_PLUGIN("lua",              /* shortname */
               MK_PLUGIN_STAGE_30); /* hooks */
 
 
+
+static void mk_lua_config(const char * path)
+{
+    char *default_file = NULL;
+    unsigned long len;
+    struct mk_config *conf;
+    struct mk_config_section * section;
+
+    mk_api->str_build(&default_file, &len, "%slua.conf", path);
+    conf = mk_api->config_create(default_file);
+    section = mk_api->config_section_get(conf, "LUA");
+
+    //    mk_lua_link_matches(section, &lua_global_matches);
+    mk_api->mem_free(default_file);
+    mk_api->config_free(conf);
+
+    //Plugin configuration should be done by now.Check for virtual
+    //host next.
+   
+
+}
+
 int _mkp_init(struct plugin_api **api, char *confdir)
 {
-    (void) confdir;
     mk_api = *api;
-
+    mk_lua_config(confdir);
     return 0;
 }
 
@@ -53,9 +74,6 @@ int _mkp_stage_30(struct plugin *plugin,
                   struct client_session *cs,
                   struct session_request *sr)
 {
-    int val;
-    short int is_restricted = MK_FALSE;
-    mk_ptr_t res;
     (void) plugin;
     (void)  cs;
     (void) sr;

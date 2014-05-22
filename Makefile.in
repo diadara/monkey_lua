@@ -1,4 +1,4 @@
-all:  monkey-test.so
+all:  monkey-lua.so
 include ../Make.common
 
 CC	= @echo "  CC   $(_PATH)/$@"; $CC
@@ -6,12 +6,9 @@ CC_QUIET= @echo -n; $CC
 CFLAGS	= $CFLAGS
 LDFLAGS = $LDFLAGS -llua
 DEFS    = $DEFS
-OBJECTS = test.o
+OBJECTS = lua.o
 
 -include $(OBJECTS:.o=.d)
 
-mk_passwd:
-	@(cd tools && $(MAKE) && cd ..)
-
-monkey-test.so: $(OBJECTS)
+monkey-lua.so: $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(DEFS) -shared -o $@ $^ -lc
