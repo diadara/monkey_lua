@@ -34,6 +34,50 @@ MONKEY_PLUGIN("lua",              /* shortname */
               MK_PLUGIN_STAGE_30); /* hooks */
 
 
+struct lua_match_t {
+    regex_t match;
+    
+    struct mk_list _head;
+};
+
+struct lua_vhost_t {
+    struct host* host;
+    struct mk_list matches;
+};
+
+
+
+struct lua_vhost_t *lua_vhosts;
+struct mk_list lua_global_matches;
+
+
+static int mk_lua_link_matches(struct mk_config_section *section, struct mk_list *list)
+{
+    int n = 0;
+    struct mk_list *head;
+    struct mk_list *line;
+    struct mk_list *head_match;
+    struct mk_config_entry *entry;
+    struct mk_string_line line *entry_match;
+    struct lua_match_t *match_line = NULL;
+
+    mk_list_foreach(head, &section->entries) {
+        entry = mk_list_entry(head, struct mk_config_entry, _head);
+        if(strncasecmp(entry->key,"Match", strlen(entry->key)) ==0) {
+            if(!entry->val) {
+                mk_err("LUA: Invalid configuration value");
+                exit(EXIT_FAILURE);
+            }
+
+            match_line = mk_api->mem_alloc_z(sizeof(struct lua_match_t));
+            mk_list_add(&match_line->_head, list);
+            str_to_regex(entry->val,&match_line->match);
+
+            n++;
+        }
+    }
+
+}
 
 static void mk_lua_config(const char * path)
 {
@@ -46,12 +90,16 @@ static void mk_lua_config(const char * path)
     conf = mk_api->config_create(default_file);
     section = mk_api->config_section_get(conf, "LUA");
 
-    //    mk_lua_link_matches(section, &lua_global_matches);
+    if(section) {
+        mk_lua_link_matches(section, &lua_global_matches);
+    }
+        
+
     mk_api->mem_free(default_file);
     mk_api->config_free(conf);
 
-    //Plugin configuration should be done by now.Check for virtual
-    //host next.
+    //Plugin global configuration should be done by now.Check for virtual
+    //hosts next.
    
 
 }
@@ -59,7 +107,10 @@ static void mk_lua_config(const char * path)
 int _mkp_init(struct plugin_api **api, char *confdir)
 {
     mk_api = *api;
+
+    mk_list_init(&lua_global_matches);
     mk_lua_config(confdir);
+
     return 0;
 }
 
