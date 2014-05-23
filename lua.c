@@ -21,6 +21,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <string.h>
+#include <regex.h>
 
 #include "MKPlugin.h"
 
@@ -51,14 +53,29 @@ struct lua_vhost_t *lua_vhosts;
 struct mk_list lua_global_matches;
 
 
+
+static void str_to_regex(char *str, regex_t *reg) /* taken from cgi plugin */
+{
+    char *p = str;
+    while (*p) {
+        if (*p == ' ') *p = '|';
+        p++;
+    }
+
+    int ret = regcomp(reg, str, REG_EXTENDED|REG_ICASE|REG_NOSUB);
+    if (ret) {
+        char tmp[80];
+        regerror(ret, reg, tmp, 80);
+        mk_err("CGI: Failed to compile regex: %s", tmp);
+    }
+}
+
+
 static int mk_lua_link_matches(struct mk_config_section *section, struct mk_list *list)
 {
     int n = 0;
     struct mk_list *head;
-    struct mk_list *line;
-    struct mk_list *head_match;
     struct mk_config_entry *entry;
-    struct mk_string_line line *entry_match;
     struct lua_match_t *match_line = NULL;
 
     mk_list_foreach(head, &section->entries) {
@@ -76,7 +93,7 @@ static int mk_lua_link_matches(struct mk_config_section *section, struct mk_list
             n++;
         }
     }
-
+    return n;
 }
 
 static void mk_lua_config(const char * path)
@@ -128,6 +145,7 @@ int _mkp_stage_30(struct plugin *plugin,
     (void) plugin;
     (void)  cs;
     (void) sr;
-    PLUGIN_TRACE("[FD %i] Handler received request");
+    PLUGIN_TRACE("[FD %i] Handler received request in lua plugin");
+
     return MK_PLUGIN_RET_NOT_ME;
 }
