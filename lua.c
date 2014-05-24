@@ -35,6 +35,10 @@ MONKEY_PLUGIN("lua",              /* shortname */
               VERSION,             /* version */
               MK_PLUGIN_STAGE_30); /* hooks */
 
+enum {
+    PATHLEN = 1024,
+    SHORTLEN = 64
+};
 
 struct lua_match_t {
     regex_t match;
@@ -80,8 +84,8 @@ static int mk_lua_link_matches(struct mk_config_section *section, struct mk_list
 
     mk_list_foreach(head, &section->entries) {
         entry = mk_list_entry(head, struct mk_config_entry, _head);
-        if(strncasecmp(entry->key,"Match", strlen(entry->key)) ==0) {
-            if(!entry->val) {
+        if (strncasecmp(entry->key,"Match", strlen(entry->key)) ==0) {
+            if (!entry->val) {
                 mk_err("LUA: Invalid configuration value");
                 exit(EXIT_FAILURE);
             }
@@ -107,7 +111,7 @@ static void mk_lua_config(const char * path)
     conf = mk_api->config_create(default_file);
     section = mk_api->config_section_get(conf, "LUA");
 
-    if(section) {
+    if (section) {
         mk_lua_link_matches(section, &lua_global_matches);
     }
         
@@ -117,8 +121,44 @@ static void mk_lua_config(const char * path)
 
     //Plugin global configuration should be done by now.Check for virtual
     //hosts next.
-   
 
+    struct mk_list *hosts = &mk_api->config->hosts;
+    struct mk_list *head_host;
+    struct host *entry_host;
+    unsigned short vhosts = 0;
+
+    mk_list_foreach(head_host, hosts) {
+        entry_host = mk_list_entry(head_host, struct host, _head);
+        section = mk_api->config_section_get(entry_host->config, "LUA");
+        if (section) vhosts++;
+    }
+
+    if (vhosts < 1) return;
+
+    // NULL-terminated linear cache
+    lua_vhosts = mk_api->mem_alloc_z((vhosts + 1) * sizeof(struct lua_vhost_t));
+
+    vhosts = 0;
+    mk_list_foreach(head_host, hosts) {
+        entry_host = mk_list_entry(head_host, struct host, _head);
+        section = mk_api->config_section_get(entry_host->config, "LUA");
+
+        if (!section) {
+            continue;
+        }
+
+        /* Set the host for this entry */
+        lua_vhosts[vhosts].host = entry_host;
+        mk_list_init(&lua_vhosts[vhosts].matches);
+
+        /*
+         * For each section found on every virtual host, lookup all 'Match'
+         * keys and populate the list of scripting rules
+         */
+        mk_lua_link_matches(section, &lua_vhosts[vhosts].matches);
+        vhosts++;
+    }
+    
 }
 
 int _mkp_init(struct plugin_api **api, char *confdir)
@@ -142,10 +182,60 @@ int _mkp_stage_30(struct plugin *plugin,
                   struct client_session *cs,
                   struct session_request *sr)
 {
-    (void) plugin;
-    (void)  cs;
-    (void) sr;
     PLUGIN_TRACE("[FD %i] Handler received request in lua plugin");
+    unsigned int i;
+    char url[PATHLEN];
+    struct lua_match_t * match_rule;
+    struct mk_list *head_matches;
 
+    if (sr->uri.len +1 > PATHLEN)
+        return MK_PLUGIN_RET_NOT_ME;
+
+    memcpy(url, sr->uri.data, sr->uri.len);
+    url[sr->uri.len] = '\0';
+
+    const char *const file  = sr->real_path.data;
+
+    /* can't interpret script if not a file */
+    if (!sr->file_info.is_file) {
+        return MK_PLUGIN_RET_NOT_ME;
+    }
+
+    /* check if request matches global lua match patterns */
+    mk_list_foreach(head_matches, &lua_global_matches) {
+        match_rule = mk_list_entry(head_matches, struct lua_match_t, _head);
+        if (regexec(&match_rule->match, url, 0, NULL, 0) == 0) {
+            goto run_lua;
+        }
+    }
+    /* Check for rules in virltual host */
+    if (!lua_vhosts) {
+        return MK_PLUGIN_RET_NOT_ME;
+    }
+
+    for (i = 0; lua_vhosts[i].host; i++) {
+        if(sr->host_conf == lua_vhosts[i].host) {
+            break;
+        }
+    }
+    /* if No vhost with lua match the request */
+    if (!lua_vhosts[i].host) {
+        return MK_PLUGIN_RET_NOT_ME;
+    }
+
+    /* vhost found, check regex */
+    mk_list_foreach(head_matches, &lua_vhosts[i].matches) {
+        match_rule = mk_list_entry(head_matches, struct lua_match_t, _head);
+        if (regexec(&match_rule->match, url, 0, NULL, 0) == 0) {
+            goto run_lua;
+        }
+    }
+
+    /* We reach here only if no match was found */
     return MK_PLUGIN_RET_NOT_ME;
+
+ run_lua:
+    printf("We have got a lua script over here! : %s \n", file);
+    /* Build up the response and send to the client */
+    return MK_PLUGIN_RET_CLOSE_CONX;
 }
