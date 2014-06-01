@@ -35,6 +35,7 @@ MONKEY_PLUGIN("lua",              /* shortname */
               VERSION,             /* version */
               MK_PLUGIN_STAGE_30); /* hooks */
 
+#define UNUSED_VARIABLE(var) (void)(var)
 enum {
     PATHLEN = 1024,
     SHORTLEN = 64
@@ -182,6 +183,8 @@ int _mkp_stage_30(struct plugin *plugin,
                   struct client_session *cs,
                   struct session_request *sr)
 {
+    UNUSED_VARIABLE(cs);
+    UNUSED_VARIABLE(plugin);
     PLUGIN_TRACE("[FD %i] Handler received request in lua plugin");
     unsigned int i;
     char url[PATHLEN];
