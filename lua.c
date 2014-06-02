@@ -25,37 +25,13 @@
 #include <regex.h>
 
 #include "MKPlugin.h"
-
-#include <lua.h>
-#include <lauxlib.h>
+#include "mk_lua.h"
 
 
 MONKEY_PLUGIN("lua",              /* shortname */
               "Lua scripting support plugin",    /* name */
               VERSION,             /* version */
               MK_PLUGIN_STAGE_30); /* hooks */
-
-#define UNUSED_VARIABLE(var) (void)(var)
-enum {
-    PATHLEN = 1024,
-    SHORTLEN = 64
-};
-
-struct lua_match_t {
-    regex_t match;
-    
-    struct mk_list _head;
-};
-
-struct lua_vhost_t {
-    struct host* host;
-    struct mk_list matches;
-};
-
-
-
-struct lua_vhost_t *lua_vhosts;
-struct mk_list lua_global_matches;
 
 
 
@@ -162,6 +138,8 @@ static void mk_lua_config(const char * path)
     
 }
 
+
+
 int _mkp_init(struct plugin_api **api, char *confdir)
 {
     mk_api = *api;
@@ -237,7 +215,14 @@ int _mkp_stage_30(struct plugin *plugin,
     /* We reach here only if no match was found */
     return MK_PLUGIN_RET_NOT_ME;
 
- run_lua:
+ run_lua:;// work around for no declaration after a label
+    lua_State *L = mk_lua_init_env();
+    luaL_dofile(L, file);
+
+    FILE *f = fopen("/home/diadara/projects/monkey-p/monkey/plugins/lua/output.txt","w");
+    fprintf(f, "request received");
+    fclose(f);
+
     printf("We have got a lua script over here! : %s \n", file);
     /* Build up the response and send to the client */
     return MK_PLUGIN_RET_CLOSE_CONX;
