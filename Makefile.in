@@ -6,7 +6,7 @@ CC_QUIET= @echo -n; $CC
 CFLAGS	= $CFLAGS
 LDFLAGS = $LDFLAGS -llua
 DEFS    = $DEFS
-OBJECTS = lua.o
+OBJECTS = lua.o environment.o
 
 -include $(OBJECTS:.o=.d)
 
