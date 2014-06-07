@@ -21,7 +21,7 @@ static int mk_lua_print(lua_State *L)
   long unsigned int len;
   if (mk_lua_return) {
     char *temp=NULL;
-    mk_api->str_build(&temp, &len, "%s\n%s",mk_lua_return,buf);
+    mk_api->str_build(&temp, &len, "%s\n%s", mk_lua_return, buf);
     mk_api->mem_free(mk_lua_return);
     mk_lua_return = temp;
   }
