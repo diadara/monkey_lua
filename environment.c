@@ -1,9 +1,15 @@
+#include <sys/socket.h> /* getsockname, getpeername */
+#include <arpa/inet.h> /* inet_ntop */
+
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
-#include "mk_lua.h"
-#include <stdio.h>
 
+
+#include "mk_lua.h"
+#include "dbg.h"
+
+#define __lua_pushmkptr(L, mk_ptr) lua_pushlstring(L, mk_ptr.data, mk_ptr.len)
 
 char *mk_lua_return = NULL;
 
@@ -25,6 +31,92 @@ static int mk_lua_print(lua_State *L)
   return 0;
 }
 
+void mk_lua_init_env_request(lua_State *L,
+                             struct client_session *cs,
+                             struct session_request *sr)
+{
+  struct sockaddr_in addr;
+  socklen_t addr_len;
+  char buffer[128];
+  char *tmpuri = NULL;
+  int len;
+  lua_newtable(L);              /* request table */
+
+  lua_pushstring(L, sr->host_conf->host_signature);
+  lua_setfield(L, -2, "server_software");
+sr
+  __lua_pushmkptr(L, sr->host_conf->documentroot);
+  lua_setfield(L, -2, "document_root");
+
+  __lua_pushmkptr(L, sr->protocol_p);
+  lua_setfield(L, -2, "server_protocol");
+
+  lua_pushstring(L, sr->host_alias->name);
+  lua_setfield(L, -2, "server_name");
+
+if (!getsockname(cs->socket, (struct sockaddr *)&addr, &addr_len)) {
+		if (!inet_ntop(AF_INET, &addr.sin_addr, buffer, 128)) {
+			log_warn("Failed to get bound address.");
+			buffer[0] = '\0';
+		}
+        lua_pushstring(L, buffer);
+        lua_setfield(L, -2, "server_addr");
+        
+        lua_pushnumber(L, ntohs(addr.sin_port));
+        lua_setfield(L, -2, "server_port");
+		
+	} else {
+		log_warn("%s", clean_errno());
+		errno = 0;
+ }       
+
+ __lua_pushmkptr(L, sr->real_path);
+ lua_setfield(L, -2, "script_filename");
+
+ __lua_pushmkptr(L, sr->uri_processed);
+ lua_setfield(L, -2, "script_name");
+
+ __lua_pushmkptr(L, sr->method_p);
+ lua_setfield(L, -2, "request_method");
+
+addr_len = sizeof(addr);
+	if (!getpeername(cs->socket, (struct sockaddr *)&addr, &addr_len)) {
+		inet_ntop(AF_INET, &addr.sin_addr, buffer, 128);
+
+        lua_pushstring(L, buffer);
+        lua_setfield(L, -2, "remote_addr");
+        
+        lua_pushnumber(L, ntohs(addr.sin_port));
+        lua_setfield(L, -2, "remote_port");
+
+	} else {
+		log_warn("%s", clean_errno());
+		errno = 0;
+	}
+
+
+	if (sr->query_string.len > 0) {
+      len = sr->uri.len + sr->query_string.len + 2;
+      tmpuri = mk_api->mem_alloc(len);
+      check_mem(tmpuri);
+      snprintf(tmpuri, len, "%.*s?%.*s",
+               (int)sr->uri.len, sr->uri.data,
+               (int)sr->query_string.len, sr->query_string.data);
+      lua_pushstring(L, tmpuri);
+	} else {
+      __lua_pushmkptr(L, sr->uri);
+	}
+    lua_setfield(L, -2, "request_uri");
+
+    __lua_pushmkptr(L, sr->query_string);
+    lua_setfield(L, -2, "query_string");
+    /* TODO parse query string and POST data into arrays */
+    
+
+ error:
+    if (tmpuri) mk_api->mem_free(tmpuri);
+    lua_setfield(L, -2, "request"); /* setting request field */
+}
 
 void mk_lua_init_env_config(lua_State *L)
 {
@@ -131,7 +223,8 @@ void mk_lua_init_env_config(lua_State *L)
 
 }
  
-lua_State * mk_lua_init_env(struct session_request *sr)
+lua_State * mk_lua_init_env(struct client_session *cs,
+                            struct session_request *sr)
 {
   (void)sr;
   lua_State *L = luaL_newstate();
@@ -144,8 +237,9 @@ lua_State * mk_lua_init_env(struct session_request *sr)
   };
     
   luaL_newlib(L, mk_lua_lib); /* registers all the functions */
-  mk_lua_init_env_config(L);  
   lua_setglobal(L,"monkey");
+  mk_lua_init_env_config(L);
+  mk_lua_init_env_request(L, cs, sr);
 
   return L;
 }

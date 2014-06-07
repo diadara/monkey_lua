@@ -35,6 +35,7 @@ struct mk_list lua_global_matches;
 
 extern char *mk_lua_return;
 
-lua_State * mk_lua_init_env(struct session_request *sr);
+lua_State * mk_lua_init_env(struct client_session *cs,
+                            struct session_request *sr);
 
 #endif
