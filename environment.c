@@ -237,9 +237,12 @@ lua_State * mk_lua_init_env(struct client_session *cs,
   };
     
   luaL_newlib(L, mk_lua_lib); /* registers all the functions */
-  lua_setglobal(L,"monkey");
   mk_lua_init_env_config(L);
   mk_lua_init_env_request(L, cs, sr);
+  lua_setglobal(L,"mk");
 
   return L;
 }
+
+
+
