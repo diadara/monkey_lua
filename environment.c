@@ -81,10 +81,11 @@ void mk_lua_init_env_config(lua_State *L)
   lua_pushstring(L, config->listen_addr);
   lua_setfield(L, -2, "listen_addr");
 
-  lua_pushstring(L, mk_api->pointer_to_buf(config->server_addr));
+  lua_pushlstring(L, config->server_addr.data, config->server_addr.len);
+  //  lua_pushstring(L, mk_api->pointer_to_buf(config->server_addr));
   lua_setfield(L, -2, "server_addr");
 
-  lua_pushstring(L, mk_api->pointer_to_buf(config->server_software));
+  lua_pushlstring(L, config->server_software.data, config->server_software.len);
   lua_setfield(L, -2, "server_software");
 
   lua_pushstring(L, config->user);
