@@ -182,9 +182,6 @@ void mk_lua_init_env_config(lua_State *L)
   lua_pushinteger(L, config->workers);
   lua_setfield(L, -2, "workers");
 
-  lua_pushinteger(L, config->max_load);
-  lua_setfield(L, -2, "max_load");
-
   lua_pushboolean(L, config->manual_tcp_cork);
   lua_setfield(L, -2, "manual_tcp_cork");
 
@@ -252,12 +249,6 @@ void mk_lua_init_env_config(lua_State *L)
   lua_pushstring(L, config->transport_layer);
   lua_setfield(L, -2, "transport_layer");
 
-
-
-
-  
-
-  
   lua_setfield(L, -2, "config");
 
 }
