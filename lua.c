@@ -217,11 +217,14 @@ int _mkp_stage_30(struct plugin *plugin,
 
  run_lua:;// work around for no declaration after a label
     lua_State *L = mk_lua_init_env(cs, sr);
-    luaL_dofile(L, file);
 
-    
     FILE *f = fopen("/home/diadara/projects/monkey-p/monkey/plugins/lua/output.txt","w");
     fprintf(f, "request received for %s\n", file);
+
+    if(luaL_dofile(L, file))
+        fprintf(f, "Error running %s", file);
+
+    
     fprintf(f,"\n%s\n", mk_lua_return);
     fclose(f);
     mk_api->mem_free(mk_lua_return);
