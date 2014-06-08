@@ -44,7 +44,7 @@ void mk_lua_init_env_request(lua_State *L,
 
   lua_pushstring(L, sr->host_conf->host_signature);
   lua_setfield(L, -2, "server_software");
-sr
+
   __lua_pushmkptr(L, sr->host_conf->documentroot);
   lua_setfield(L, -2, "document_root");
 
