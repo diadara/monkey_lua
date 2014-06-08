@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
 #include <sys/socket.h> /* getsockname, getpeername */
 #include <arpa/inet.h> /* inet_ntop */
 
@@ -35,11 +38,16 @@ void mk_lua_init_env_request(lua_State *L,
                              struct client_session *cs,
                              struct session_request *sr)
 {
+  mk_ptr_t key, value;
   struct sockaddr_in addr;
   socklen_t addr_len;
   char buffer[128];
   char *tmpuri = NULL;
   int len;
+  unsigned int i, j;
+  char *hinit, *hend;
+  size_t hlen;
+
   lua_newtable(L);              /* request table */
 
   lua_pushstring(L, sr->host_conf->host_signature);
@@ -111,6 +119,37 @@ addr_len = sizeof(addr);
     __lua_pushmkptr(L, sr->query_string);
     lua_setfield(L, -2, "query_string");
     /* TODO parse query string and POST data into arrays */
+
+    __lua_pushmkptr(L, sr->data);
+    lua_setfield(L, -2, "data");
+      
+	strcpy(buffer, "HTTP_");
+
+	for (i = 0; i < (unsigned int)sr->headers_toc.length; i++) {
+		hinit = sr->headers_toc.rows[i].init;
+		hend = sr->headers_toc.rows[i].end;
+		hlen = hend - hinit;
+
+		for (j = 0; j < hlen; j++) {
+			if (hinit[j] == ':') {
+				break;
+			}
+			else if (hinit[j] != '-') {
+				buffer[5 + j] = toupper(hinit[j]);
+			}
+			else {
+				buffer[5 + j] = '_';
+			}
+		}
+
+		key = (mk_ptr_t){.len = 5 + j, .data = buffer};
+		value = (mk_ptr_t){.len = hlen - j - 2, .data = hinit + j + 2};
+
+        __lua_pushmkptr(L, key);
+        __lua_pushmkptr(L, value);
+        lua_settable(L,-3);
+	}
+
     
 
  error:
