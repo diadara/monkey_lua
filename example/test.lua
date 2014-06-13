@@ -1,6 +1,8 @@
 config = mk.config
 r = mk.request
+rs = mk.response
 
+rs.status = 200
 mk.print("Hello World")
 
 i = 1
