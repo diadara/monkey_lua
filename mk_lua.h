@@ -37,5 +37,7 @@ extern char *mk_lua_return;
 
 lua_State * mk_lua_init_env(struct client_session *cs,
                             struct session_request *sr);
-
+void mk_lua_post_execute(lua_State *L,
+                         struct client_session *cs,
+                         struct session_request *sr);
 #endif

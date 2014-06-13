@@ -229,7 +229,7 @@ int _mkp_stage_30(struct plugin *plugin,
     fclose(f);
     mk_api->mem_free(mk_lua_return);
     mk_lua_return = NULL;
-
+    mk_lua_post_execute(L, cs, sr);
 
     return MK_PLUGIN_RET_CLOSE_CONX;
 }

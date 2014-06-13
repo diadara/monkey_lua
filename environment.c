@@ -316,4 +316,11 @@ lua_State * mk_lua_init_env(struct client_session *cs,
 }
 
 
+void mk_lua_post_execute(lua_State *L,
+                         struct client_session *cs,
+                         struct session_request *sr)
+{
+  UNUSED_VARIABLE(cs);
+  mk_lua_set_response(L, sr);
+}
 
