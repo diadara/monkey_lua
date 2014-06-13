@@ -34,6 +34,15 @@ static int mk_lua_print(lua_State *L)
   return 0;
 }
 
+void mk_lua_init_env_response(lua_State *L, struct session_request *sr)
+{
+  UNUSED_VARIABLE(sr);
+  lua_newtable(L);
+  lua_newtable(L);
+  lua_setfield(L, -2, "headers");
+  lua_setfield(L, -2, "response"); /* initialising response table */
+}
+
 void mk_lua_init_env_request(lua_State *L,
                              struct client_session *cs,
                              struct session_request *sr)
@@ -269,6 +278,7 @@ lua_State * mk_lua_init_env(struct client_session *cs,
   luaL_newlib(L, mk_lua_lib); /* registers all the functions */
   mk_lua_init_env_config(L);
   mk_lua_init_env_request(L, cs, sr);
+  mk_lua_init_env_response(L, sr);
   lua_setglobal(L,"mk");
 
   return L;
