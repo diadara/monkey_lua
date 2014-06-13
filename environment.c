@@ -43,6 +43,37 @@ void mk_lua_init_env_response(lua_State *L, struct session_request *sr)
   lua_setfield(L, -2, "response"); /* initialising response table */
 }
 
+void mk_lua_set_response(lua_State *L, struct session_request *sr)
+{
+  lua_getglobal(L, "mk");
+  lua_getfield(L, -1, "response");
+  lua_getfield(L, -1, "status");
+  if(lua_isnil(L, -1)) {
+    int isnum;
+    int status = lua_tounsignedx(L, -1, &isnum);
+    if(isnum) mk_api->header_set_http_status(sr, status);
+    printf("\n%d\n", status);
+  }
+  lua_pop(L,1);
+  lua_getfield(L, -1, "headers");
+        
+  lua_pushnil(L);  /* first key */
+  char* header;
+  long unsigned int len;
+  while (lua_next(L, -2) != 0) {
+    /* uses 'key' (at index -2) and 'value' (at index -1) */
+    header = NULL;
+    mk_api->str_build(&header,
+                      &len,
+                      "%s: %s",
+                      luaL_checkstring(L, -2),
+                      luaL_checkstring(L, -1));
+    mk_api->header_add(sr, header, len);
+    /* removes 'value'; keeps 'key' for next iteration */
+    lua_pop(L, 1);
+  }
+}
+
 void mk_lua_init_env_request(lua_State *L,
                              struct client_session *cs,
                              struct session_request *sr)
