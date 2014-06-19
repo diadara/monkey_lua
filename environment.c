@@ -373,14 +373,31 @@ void mk_lua_init_env_config(lua_State *L)
   lua_setfield(L, -2, "config");
 
 }
- 
+
+static int mk_lua_traceback(lua_State *L)
+{
+  lua_getglobal(L, "debug");
+  lua_getfield(L, -1, "traceback");
+  lua_pushvalue(L, 1);
+  lua_pushinteger(L, 2);
+  lua_call(L, 2, 1);
+
+  lua_getglobal(L,"mk");
+  lua_getfield(L, -1, "print");
+  lua_pushvalue(L, -3);
+  lua_call(L, 1, 0);
+  //  printf("\n%s\n", lua_tostring(L, -1));
+  return 1;
+}
+
 lua_State * mk_lua_init_env(struct client_session *cs,
                             struct session_request *sr)
 {
   (void)sr;
   lua_State *L = luaL_newstate();
   luaL_openlibs(L);
-  
+  lua_pushcfunction(L, mk_lua_traceback);
+
   /* Register these functions */
   static const struct luaL_Reg mk_lua_lib []  ={
     {"print", mk_lua_print},

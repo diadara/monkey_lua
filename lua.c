@@ -221,8 +221,14 @@ int _mkp_stage_30(struct plugin *plugin,
     FILE *f = fopen("/home/diadara/projects/monkey-p/monkey/plugins/lua/output.txt","w");
     fprintf(f, "request received for %s\n", file);
 
-    if(luaL_dofile(L, file))
-        fprintf(f, "Error running %s", file);
+    int status = luaL_loadfile(L, file);
+    if (status) {
+        fprintf(f, "%s\n", lua_tostring(L, -1));
+        /* change status */
+    } else {
+        lua_pcall(L, 0, 0, lua_gettop(L) - 1);
+    }
+
 
     
     fprintf(f,"\n%s\n", mk_lua_return);
