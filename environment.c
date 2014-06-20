@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
 #include <sys/socket.h> /* getsockname, getpeername */
 #include <arpa/inet.h> /* inet_ntop */
@@ -12,6 +13,8 @@
 #include "dbg.h"
 
 #define __lua_pushmkptr(L, mk_ptr) lua_pushlstring(L, mk_ptr.data, mk_ptr.len)
+
+#define FORM_URLENCODED "application/x-www-form-urlencoded"
 
 char *mk_lua_return = NULL;
 
@@ -33,25 +36,14 @@ static int mk_lua_print(lua_State *L)
   return 0;
 }
 
-
-static int  mk_lua_querry_to_table(lua_State *L)
+void mk_lua_urlencoded_to_table(lua_State *L, char *qs)
 {
-  
   char *key;
   char *value;
   char *strtok_state;
   int t;
-
-  lua_getglobal(L, "mk");
-  lua_getfield(L, -1, "request");
-  lua_getfield(L, -1, "query_string");
-  char *querry_s = lua_tostring(L,-1);
   
-  lua_newtable(L);
-  lua_newtable(L);              /* [table, table] */
-  
-  
-  key = strtok_r(querry_s, "&", &strtok_state);
+  key = strtok_r(qs, "&", &strtok_state);
   while (key) {
     value = strchr(key, '=');
     if (value) {
@@ -71,48 +63,158 @@ static int  mk_lua_querry_to_table(lua_State *L)
     switch (t) {
     case LUA_TNIL:
     case LUA_TNONE:{
-            lua_pop(L, 1);      /* [table<s,t>, table<s,s>] */
-            lua_newtable(L);    /* [array, table<s,t>, table<s,s>] */
-            lua_pushnumber(L, 1);       /* [1, array, table<s,t>, table<s,s>] */
-            lua_pushstring(L, value);   /* [string, 1, array, table<s,t>, table<s,s>] */
-            lua_settable(L, -3);        /* [array, table<s,t>, table<s,s>]  */
-            lua_setfield(L, -2, key);   /* [table<s,t>, table<s,s>] */
-            break;
-        }
+      lua_pop(L, 1);      /* [table<s,t>, table<s,s>] */
+      lua_newtable(L);    /* [array, table<s,t>, table<s,s>] */
+      lua_pushnumber(L, 1);       /* [1, array, table<s,t>, table<s,s>] */
+      lua_pushstring(L, value);   /* [string, 1, array, table<s,t>, table<s,s>] */
+      lua_settable(L, -3);        /* [array, table<s,t>, table<s,s>]  */
+      lua_setfield(L, -2, key);   /* [table<s,t>, table<s,s>] */
+      break;
+    }
     case LUA_TTABLE:{
-            /* [array, table<s,t>, table<s,s>] */
-            int size = lua_rawlen(L, -1);
-            lua_pushnumber(L, size + 1);        /* [#, array, table<s,t>, table<s,s>] */
-            lua_pushstring(L, value);   /* [string, #, array, table<s,t>, table<s,s>] */
-            lua_settable(L, -3);        /* [array, table<s,t>, table<s,s>] */
-            lua_setfield(L, -2, key);   /* [table<s,t>, table<s,s>] */
-            break;
-        }
+      /* [array, table<s,t>, table<s,s>] */
+      int size = lua_rawlen(L, -1);
+      lua_pushnumber(L, size + 1);        /* [#, array, table<s,t>, table<s,s>] */
+      lua_pushstring(L, value);   /* [string, #, array, table<s,t>, table<s,s>] */
+      lua_settable(L, -3);        /* [array, table<s,t>, table<s,s>] */
+      lua_setfield(L, -2, key);   /* [table<s,t>, table<s,s>] */
+      break;
+    }
     }
 
     /* L is [table<s,t>, table<s,s>] */
     /* build simple */
     lua_getfield(L, -2, key);   /* [VALUE, table<s,s>, table<s,t>] */
     if (lua_isnoneornil(L, -1)) {       /* only set if not already set */
-        lua_pop(L, 1);          /* [table<s,s>, table<s,t>]] */
-        lua_pushstring(L, value);       /* [string, table<s,s>, table<s,t>] */
-        lua_setfield(L, -3, key);       /* [table<s,s>, table<s,t>]  */
+      lua_pop(L, 1);          /* [table<s,s>, table<s,t>]] */
+      lua_pushstring(L, value);       /* [string, table<s,s>, table<s,t>] */
+      lua_setfield(L, -3, key);       /* [table<s,s>, table<s,t>]  */
     }
     else {
-        lua_pop(L, 1);
+      lua_pop(L, 1);
     }
-
-
-
-
 
     key = strtok_r(NULL, "&", &strtok_state);
   }    
 
+}
+
+void mk_lua_multipart_to_table(lua_State *L,
+                               char *boundary,
+                               char *data)
+{
+char *value, *key, *filename;
+  char *start = data, *end = 0, *crlf = 0;
+  unsigned long int vlen = 0;
+  unsigned int len = 0;
+  len = strlen(boundary);
+  int t;
+  start = strstr(data, boundary); /* start points to the first
+                                     boundary */
+  while(start) {
+    printf("\nstart: %s\n", start);
+    end = strstr((char *) (start + 1), boundary);
+    /* find the next boundary and store it in end*/
+    if (end == NULL) break;            /* if no boundary, we have parsed
+                                          form data */
+    crlf = strstr((char *) start, "\r\n\r\n");
+    if (!crlf) break;           /* there's no data */
+    key = (char *) mk_api->mem_alloc_z(256);
+    filename = (char *) mk_api->mem_alloc_z(256);
+    vlen = end - crlf - 8;
+    value = (char *) mk_api->mem_alloc_z(vlen+1);
+    memcpy(value, crlf + 4, vlen);
+    sscanf(start + len + 2,
+           "Content-Disposition: form-data; name=\"%255[^\"]\"; filename=\"%255[^\"]\"",
+           key, filename);
+
+    printf("\n%s : %s \n", key, value);
+  
+
+    if (strlen(key)) {
+      lua_getfield(L, -1, key);   /* [VALUE, table<s,t>, table<s,s>] */
+      /* borrowed from apache mod_lua */
+      t = lua_type(L, -1);
+      switch (t) {
+      case LUA_TNIL:
+      case LUA_TNONE:{
+        lua_pop(L, 1);      /* [table<s,t>, table<s,s>] */
+        lua_newtable(L);    /* [array, table<s,t>, table<s,s>] */
+        lua_pushnumber(L, 1);       /* [1, array, table<s,t>, table<s,s>] */
+        lua_pushlstring(L, value, vlen);   /* [string, 1, array, table<s,t>, table<s,s>] */
+        lua_settable(L, -3);        /* [array, table<s,t>, table<s,s>]  */
+        lua_setfield(L, -2, key);   /* [table<s,t>, table<s,s>] */
+        break;
+      }
+      case LUA_TTABLE:{
+        /* [array, table<s,t>, table<s,s>] */
+        int size = lua_rawlen(L, -1);
+        lua_pushnumber(L, size + 1);        /* [#, array, table<s,t>, table<s,s>] */
+        lua_pushlstring(L, value, vlen);   /* [string, #, array, table<s,t>, table<s,s>] */
+        lua_settable(L, -3);        /* [array, table<s,t>, table<s,s>] */
+        lua_setfield(L, -2, key);   /* [table<s,t>, table<s,s>] */
+        break;
+      }
+      }
+
+      /* L is [table<s,t>, table<s,s>] */
+      /* build simple */
+      lua_getfield(L, -2, key);   /* [VALUE, table<s,s>, table<s,t>] */
+      if (lua_isnoneornil(L, -1)) {       /* only set if not already set */
+        lua_pop(L, 1);          /* [table<s,s>, table<s,t>]] */
+        lua_pushstring(L, value);       /* [string, table<s,s>, table<s,t>] */
+        lua_setfield(L, -3, key);       /* [table<s,s>, table<s,t>]  */
+      }
+      else {
+        lua_pop(L, 1);
+      }
+    }
+    mk_api->mem_free(value);
+    mk_api->mem_free(key);
+    mk_api->mem_free(filename);
+    start = end;
+  }
+}
+
+static int  mk_lua_query_to_table(lua_State *L)
+{
+  lua_getglobal(L, "mk");
+  lua_getfield(L, -1, "request");
+  lua_getfield(L, -1, "query_string");
+  char *qs = lua_tostring(L,-1);
+
+  lua_newtable(L);
+  lua_newtable(L);              /* [table, table] */
+
+  mk_lua_urlencoded_to_table(L, qs);
   return 2;
 }
 
 
+static int mk_lua_data_to_table(lua_State *L)
+{
+  struct session_request *sr = (struct session_request *) lua_touserdata(L, lua_upvalueindex(1));
+  char *content_type = mk_api->pointer_to_buf(sr->content_type);
+  char *data = mk_api->pointer_to_buf(sr->data);
+  char *multipart = mk_api->mem_alloc(256);
+  lua_newtable(L);
+  lua_newtable(L);
+  
+  if (strcmp(content_type, FORM_URLENCODED) == 0) {
+    mk_lua_urlencoded_to_table(L, data);
+    return 2;
+  }
+  else if (content_type != NULL && (sscanf(content_type, "multipart/form-data; boundary=%250c", multipart) == 1)) {
+    mk_lua_multipart_to_table(L, multipart, data);
+  }
+  else {
+    printf(" this shouldn't have happend");
+    printf("\n%s\n%s", content_type, data);
+  }
+  mk_api->mem_free(content_type);
+  mk_api->mem_free(data);
+  return 2;
+}
 
 void mk_lua_init_env_response(lua_State *L, struct session_request *sr)
 {
@@ -270,8 +372,12 @@ void mk_lua_init_env_request(lua_State *L,
     lua_settable(L,-3);
   }
 
-  lua_pushcfunction(L, mk_lua_querry_to_table);
+  lua_pushcfunction(L, mk_lua_query_to_table);
   lua_setfield(L, -2, "parseargs");
+
+  lua_pushlightuserdata(L, (void *) sr);
+  lua_pushcclosure(L, mk_lua_data_to_table, 1);
+  lua_setfield(L, -2, "parsedata");
 
  error:
   if (tmpuri) mk_api->mem_free(tmpuri);
