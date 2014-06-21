@@ -204,7 +204,7 @@ static int mk_lua_data_to_table(lua_State *L)
     mk_lua_urlencoded_to_table(L, data);
     return 2;
   }
-  else if (content_type != NULL && (sscanf(content_type, "multipart/form-data; boundary=%250c", multipart) == 1)) {
+  else if (content_type != NULL && (sscanf(content_type, "multipart/form-data; boundary=%s", multipart) == 1)) {
     mk_lua_multipart_to_table(L, multipart, data);
   }
   else {
