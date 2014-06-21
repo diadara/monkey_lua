@@ -230,11 +230,14 @@ void mk_lua_set_response(lua_State *L, struct session_request *sr)
   lua_getglobal(L, "mk");
   lua_getfield(L, -1, "response");
   lua_getfield(L, -1, "status");
-  if(lua_isnil(L, -1)) {
+  if(!lua_isnil(L, -1)) {
     int isnum;
     int status = lua_tounsignedx(L, -1, &isnum);
     if(isnum) mk_api->header_set_http_status(sr, status);
     printf("\n%d\n", status);
+  }
+  else {
+    mk_api->header_set_http_status(sr, 200);
   }
   lua_pop(L,1);
   lua_getfield(L, -1, "headers");
