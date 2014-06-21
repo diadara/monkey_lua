@@ -147,7 +147,8 @@ end
 
 
 
-rs.status = 200
+rs.status = 200;
+rs.headers["Content-Type"] = "text/html; charset=utf-8"
 mk.print("Hello World")
 
 i = 1
