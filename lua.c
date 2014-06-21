@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <regex.h>
-
+#include <fcntl.h>
 #include "MKPlugin.h"
 #include "mk_lua.h"
 
@@ -230,12 +230,22 @@ int _mkp_stage_30(struct plugin *plugin,
     }
 
 
-    
+    int ret_len = strlen(mk_lua_return);
     fprintf(f,"\n%s\n", mk_lua_return);
     fclose(f);
-    mk_api->mem_free(mk_lua_return);
-    mk_lua_return = NULL;
+
     mk_lua_post_execute(L, cs, sr);
     mk_api->header_send(cs->socket, cs, sr);
+
+    
+    fcntl(cs->socket, F_SETFL, fcntl(cs->socket, F_GETFL, 0) & ~O_NONBLOCK);
+
+    mk_api->socket_set_nonblocking(cs->socket);
+    mk_api->socket_send(cs->socket, mk_lua_return, ret_len);
+
+
+    mk_api->mem_free(mk_lua_return);
+    mk_lua_return = NULL;
+        
     return MK_PLUGIN_RET_END;
 }
