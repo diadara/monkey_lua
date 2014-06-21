@@ -103,7 +103,7 @@ void mk_lua_multipart_to_table(lua_State *L,
                                char *boundary,
                                char *data)
 {
-char *value, *key, *filename;
+  char *value, *key, *filename;
   char *start = data, *end = 0, *crlf = 0;
   unsigned long int vlen = 0;
   unsigned int len = 0;
@@ -112,7 +112,6 @@ char *value, *key, *filename;
   start = strstr(data, boundary); /* start points to the first
                                      boundary */
   while(start) {
-    printf("\nstart: %s\n", start);
     end = strstr((char *) (start + 1), boundary);
     /* find the next boundary and store it in end*/
     if (end == NULL) break;            /* if no boundary, we have parsed
@@ -128,8 +127,6 @@ char *value, *key, *filename;
            "Content-Disposition: form-data; name=\"%255[^\"]\"; filename=\"%255[^\"]\"",
            key, filename);
 
-    printf("\n%s : %s \n", key, value);
-  
 
     if (strlen(key)) {
       lua_getfield(L, -1, key);   /* [VALUE, table<s,t>, table<s,s>] */
@@ -207,10 +204,7 @@ static int mk_lua_data_to_table(lua_State *L)
   else if (content_type != NULL && (sscanf(content_type, "multipart/form-data; boundary=%s", multipart) == 1)) {
     mk_lua_multipart_to_table(L, multipart, data);
   }
-  else {
-    printf(" this shouldn't have happend");
-    printf("\n%s\n%s", content_type, data);
-  }
+  
   mk_api->mem_free(content_type);
   mk_api->mem_free(data);
   return 2;
@@ -234,7 +228,6 @@ void mk_lua_set_response(lua_State *L, struct session_request *sr)
     int isnum;
     int status = lua_tounsignedx(L, -1, &isnum);
     if(isnum) mk_api->header_set_http_status(sr, status);
-    printf("\n%d\n", status);
   }
   else {
     mk_api->header_set_http_status(sr, 200);
