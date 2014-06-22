@@ -271,10 +271,21 @@ int _mkp_stage_30(struct plugin *plugin,
     else {
         mk_api->header_set_http_status(sr, 500);
     }
+    
     if (status_run == LUA_OK || (global_debug || lua_vhosts[i].debug))
-        mk_api->header_send(cs->socket, cs, sr);
+        {
+            char *header = NULL;
+            unsigned long int len;
+            mk_api->str_build(&header,
+                              &len,
+                              "Content-length : %d",
+                             (int)strlen(mk_lua_return));
+            mk_api->header_add(sr, header, len);
+            mk_api->header_send(cs->socket, cs, sr);
+            free(header);
+            mk_lua_send(cs, sr, mk_lua_return);
+        }
 
-    mk_lua_send(cs, sr, mk_lua_return);
 
  cleanup:
     lua_close(L);
