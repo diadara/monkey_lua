@@ -1,3 +1,5 @@
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+
 #ifndef _MK_LUA
 #define _MK_LUA
 
@@ -43,3 +45,7 @@ void mk_lua_post_execute(lua_State *L,
                          struct client_session *cs,
                          struct session_request *sr);
 #endif
+
+
+
+
