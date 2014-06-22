@@ -26,9 +26,11 @@ struct lua_match_t {
 struct lua_vhost_t {
     struct host* host;
     struct mk_list matches;
+    int debug;
 };
 
 
+int global_debug;
 
 struct lua_vhost_t *lua_vhosts;
 struct mk_list lua_global_matches;

@@ -83,15 +83,22 @@ static void mk_lua_config(const char * path)
     unsigned long len;
     struct mk_config *conf;
     struct mk_config_section * section;
-
+    char *tmp = NULL;
+    
     mk_api->str_build(&default_file, &len, "%slua.conf", path);
     conf = mk_api->config_create(default_file);
     section = mk_api->config_section_get(conf, "LUA");
 
     if (section) {
         mk_lua_link_matches(section, &lua_global_matches);
+        tmp = mk_api->config_section_getval(section, "Debug", MK_CONFIG_VAL_BOOL);
+        if (tmp)
+            global_debug = MK_TRUE;
+        else
+            global_debug = MK_FALSE;
     }
-        
+
+    
 
     mk_api->mem_free(default_file);
     mk_api->config_free(conf);
@@ -133,6 +140,16 @@ static void mk_lua_config(const char * path)
          * keys and populate the list of scripting rules
          */
         mk_lua_link_matches(section, &lua_vhosts[vhosts].matches);
+
+        /* add debug to this vhost */
+        /* if there is no debug defined, config will return off */
+
+
+        tmp =  mk_api->config_section_getval(section, "Debug", MK_CONFIG_VAL_BOOL);
+        if (tmp)
+            lua_vhosts[vhosts].debug = MK_TRUE;
+        else
+            lua_vhosts[vhosts].debug = MK_FALSE;
         vhosts++;
     }
     
@@ -154,7 +171,16 @@ void _mkp_exit()
 {
 }
 
+void mk_lua_send(struct client_session *cs,
+                 struct session_request *sr,
+                 const char * buffer) {
+    UNUSED_VARIABLE(sr);
+    int ret_len = strlen(buffer);
+    fcntl(cs->socket, F_SETFL, fcntl(cs->socket, F_GETFL, 0) & ~O_NONBLOCK);
+    mk_api->socket_set_nonblocking(cs->socket);
+    mk_api->socket_send(cs->socket, buffer, ret_len);
 
+}
 
 /* Object handler */
 int _mkp_stage_30(struct plugin *plugin,
@@ -221,31 +247,39 @@ int _mkp_stage_30(struct plugin *plugin,
     FILE *f = fopen("/home/diadara/projects/monkey-p/monkey/plugins/lua/output.txt","w");
     fprintf(f, "request received for %s\n", file);
 
-    int status = luaL_loadfile(L, file);
-    if (status) {
-        fprintf(f, "%s\n", lua_tostring(L, -1));
-        /* change status */
-    } else {
-        lua_pcall(L, 0, 0, lua_gettop(L) - 1);
+    int status_load, status_run;
+
+    status_load = luaL_loadfile(L, file);
+    if (status_load != LUA_OK) {
+        mk_api->header_set_http_status(sr, 500);
+        mk_api->header_send(cs->socket, cs, sr);
+        if(global_debug || lua_vhosts[i].debug)
+            mk_lua_send(cs, sr, lua_tostring(L, -1));
+        goto cleanup;
+    }
+    else {
+        status_run = lua_pcall(L, 0, 0, lua_gettop(L) - 1);
     }
 
 
-    int ret_len = strlen(mk_lua_return);
     fprintf(f,"\n%s\n", mk_lua_return);
     fclose(f);
 
-    mk_lua_post_execute(L, cs, sr);
-    mk_api->header_send(cs->socket, cs, sr);
+    if (status_run == LUA_OK) {
+        mk_lua_post_execute(L, cs, sr);
+    }
+    else {
+        mk_api->header_set_http_status(sr, 500);
+    }
+    if (status_run == LUA_OK || (global_debug || lua_vhosts[i].debug))
+        mk_api->header_send(cs->socket, cs, sr);
 
-    
-    fcntl(cs->socket, F_SETFL, fcntl(cs->socket, F_GETFL, 0) & ~O_NONBLOCK);
+    mk_lua_send(cs, sr, mk_lua_return);
 
-    mk_api->socket_set_nonblocking(cs->socket);
-    mk_api->socket_send(cs->socket, mk_lua_return, ret_len);
-
-
+ cleanup:
+    lua_close(L);
     mk_api->mem_free(mk_lua_return);
     mk_lua_return = NULL;
-        
+
     return MK_PLUGIN_RET_END;
 }
