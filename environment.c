@@ -495,10 +495,16 @@ static int mk_lua_traceback(lua_State *L)
 lua_State * mk_lua_init_env(struct client_session *cs,
                             struct session_request *sr)
 {
-    (void)sr;
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
     lua_pushcfunction(L, mk_lua_traceback);
+
+    /* pushing cs and sr for other functions to get access */
+    lua_pushlightuserdata(L, (void *) sr);
+    lua_setglobal(L, "__mk_lua_sr");
+
+    lua_pushlightuserdata(L, (void *) cs);
+    lua_setglobal(L, "__mk_lua_cs");
 
     /* Register these functions */
     static const struct luaL_Reg mk_lua_lib []  ={
