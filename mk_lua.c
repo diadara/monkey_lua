@@ -267,7 +267,7 @@ int _mkp_stage_30(struct plugin *plugin,
     fclose(f);
 
     if (status_run == LUA_OK) {
-        mk_lua_post_execute(L, cs, sr);
+        mk_lua_post_execute(L);
     }
     else {
         mk_api->header_set_http_status(sr, 500);

@@ -6,7 +6,7 @@ CC_QUIET= @echo -n; $CC
 CFLAGS	= $CFLAGS
 LDFLAGS = $LDFLAGS -llua
 DEFS    = $DEFS
-OBJECTS = mk_lua.o mk_lua_env.o mk_lua_config.o
+OBJECTS = mk_lua.o mk_lua_env.o mk_lua_config.o mk_lua_request.o mk_lua_util.o
 
 -include $(OBJECTS:.o=.d)
 
