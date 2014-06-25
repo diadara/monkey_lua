@@ -9,7 +9,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include "MKPlugin.h"
-
+#include "mk_lua_config.h"
 
 
 #define UNUSED_VARIABLE(var) (void)(var)

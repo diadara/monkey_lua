@@ -242,7 +242,8 @@ int _mkp_stage_30(struct plugin *plugin,
     return MK_PLUGIN_RET_NOT_ME;
 
  run_lua:;// work around for no declaration after a label
-    lua_State *L = mk_lua_init_env(cs, sr);
+    /* sets up the api, the traceback function is at the top of the stack */
+    lua_State *L = mk_lua_init_env(cs, sr); 
 
     FILE *f = fopen("/home/diadara/projects/monkey-p/monkey/plugins/lua/output.txt","w");
     fprintf(f, "request received for %s\n", file);
