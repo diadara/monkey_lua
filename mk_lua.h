@@ -13,6 +13,7 @@
 #include "mk_lua_config.h"
 #include "mk_lua_util.h"
 #include "mk_lua_request.h"
+#include "mk_lua_cookie.h"
 
 #define UNUSED_VARIABLE(var) (void)(var)
 

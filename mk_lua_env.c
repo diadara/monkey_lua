@@ -76,6 +76,7 @@ lua_State * mk_lua_init_env(struct client_session *cs,
     mk_lua_inject_config(L);
     mk_lua_inject_request(L);
     mk_lua_inject_response(L);
+    mk_lua_inject_cookies(L);
     lua_setglobal(L,"mk");
 
     return L;
