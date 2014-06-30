@@ -159,13 +159,13 @@ do
 end
 
 
-
+--[[
 i = 1
 for k,v in pairs(config) do
    mk.print(i .. " " .. k .. " " .. tostring(v))
    i = i + 1
 end
-
+]]
 t1, t2 = r.parseargs()
 p1, p2 = r.parsedata()
 
@@ -173,5 +173,11 @@ mk.print(PrettyPrint(t1))
 mk.print(PrettyPrint(t2))
 mk.print(PrettyPrint(p1))
 mk.print(PrettyPrint(p2))
+
+mk.print(PrettyPrint(mk.cookies.get_cookies()))
+
+mk.cookies.set_cookie{name="name", value="nithin", httponly = true, secure=true, domain="monkey.com", expiry=os.time()+60*60*8}
+
+a = "this is a string"
 
 mk.print("last line !")
