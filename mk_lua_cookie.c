@@ -141,7 +141,6 @@ static int mk_lua_set_cookie(lua_State *L) {
     else if (expires > 0) {
         exp.data = mk_api->mem_alloc(COOKIE_MAX_DATE_LEN);
         exp.len = mk_api->time_to_gmt(&exp.data, expires);
-        printf("\n %s", exp.data);
         mk_api->iov_add_entry(sr->headers._extra_rows, COOKIE_EXPIRE, strlen(COOKIE_EXPIRE),
                               mk_lua_iov_none, MK_IOV_NOT_FREE_BUF);
      
