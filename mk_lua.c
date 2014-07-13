@@ -163,12 +163,24 @@ int _mkp_init(struct plugin_api **api, char *confdir)
 
     mk_list_init(&lua_global_matches);
     mk_lua_config(confdir);
+    pthread_key_create(&lua_request_list, NULL);
+    getrlimit(RLIMIT_NOFILE, &lim);
+    requests_by_socket = mk_api->mem_alloc_z(sizeof(struct lua_request *) * lim.rlim_cur);
 
     return 0;
 }
 
 void _mkp_exit()
 {
+    mk_api->mem_free(requests_by_socket);
+}
+
+void _mkp_core_thctx(void)
+{
+    struct mk_list *list = mk_api->mem_alloc_z(sizeof(struct mk_list));
+
+    mk_list_init(list);
+    pthread_setspecific(lua_request_list, (void *) list);
 }
 
 void mk_lua_send(struct client_session *cs,
@@ -241,15 +253,28 @@ int _mkp_stage_30(struct plugin *plugin,
     /* We reach here only if no match was found */
     return MK_PLUGIN_RET_NOT_ME;
 
- run_lua:;// work around for no declaration after a label
-    /* sets up the api, the traceback function is at the top of the stack */
-    lua_State *L = mk_lua_init_env(cs, sr); 
+ run_lua:
 
-    FILE *f = fopen("/home/diadara/projects/monkey-p/monkey/plugins/lua/output.txt","w");
-    fprintf(f, "request received for %s\n", file);
+    int status = do_lua(file, sr, cs, plugin);
 
+    /* These are just for the other plugins, such as logger; bogus data */
+    mk_api->header_set_http_status(sr, status);
+
+    if (status != 200)
+        return MK_PLUGIN_RET_CLOSE_CONX;
+
+    sr->headers.cgi = SH_CGI;
+
+    return MK_PLUGIN_RET_CONTINUE;
+
+}
+
+
+void * Lua_excecution(void *r)
+{
     int status_load, status_run;
-
+    status_load = luaL_loadfile(L, file);
+    int status_load, status_run;
     status_load = luaL_loadfile(L, file);
     if (status_load != LUA_OK) {
         mk_api->header_set_http_status(sr, 500);
@@ -261,10 +286,6 @@ int _mkp_stage_30(struct plugin *plugin,
     else {
         status_run = lua_pcall(L, 0, 0, lua_gettop(L) - 1);
     }
-
-
-    fprintf(f,"\n%s\n", mk_lua_return);
-    fclose(f);
 
     if (status_run == LUA_OK) {
         mk_lua_post_execute(L);
@@ -288,10 +309,109 @@ int _mkp_stage_30(struct plugin *plugin,
         }
 
 
- cleanup:
-    lua_close(L);
-    mk_api->mem_free(mk_lua_return);
-    mk_lua_return = NULL;
 
-    return MK_PLUGIN_RET_END;
 }
+
+int do_lua(const char *const file,
+           struct session_request *const sr,
+           struct client_session *const cs,
+           struct plugin* const plugin)
+{
+
+
+    lua_State *L = mk_lua_init_env(cs, sr); 
+    lua_request *r = lua_req_create(L, cs->socket, sr, cs);
+    mk_api->worker_spawn(lua_excecution, r);
+
+    /* We have nothing to write yet */
+    mk_api->event_socket_change_mode(socket, MK_EPOLL_SLEEP, MK_EPOLL_LEVEL_TRIGGERED);
+
+    return 200;
+}
+
+struct lua_request *lua_req_create(lua_State *L, int socket, struct session_request *sr,
+					struct client_session *cs)
+{
+    struct lua_request *newlua = mk_api->mem_alloc_z(sizeof(struct lua_request));
+    if (!newlua) return NULL;
+
+    newlua->L = L;
+    newlua->socket = socket;
+    newlua->sr = sr;
+    newlua->cs = cs;
+
+    return newlua;
+}
+
+void lua_req_add(struct lua_request *r)
+{
+    struct mk_list *list = pthread_getspecific(lua_request_list);
+
+    mk_bug(!list);
+    mk_list_add(&r->_head, list);
+}
+
+int lua_req_del(struct lua_request *r)
+{
+    if (!r) return 1;
+
+    mk_list_del(&r->_head);
+    mk_api->mem_free(r);
+
+    return 0;
+}
+
+
+static int hangup(const int socket)
+{
+
+  if ((r = cgi_req_get(socket))) {
+
+        /* If this was closed by us, do nothing */
+        if (!requests_by_socket[r->socket])
+            return MK_PLUGIN_RET_EVENT_OWNED;
+
+
+        /* XXX Fixme: this needs to be atomic */
+        requests_by_socket[r->socket] = NULL;
+
+        lua_req_del(r);
+
+        return MK_PLUGIN_RET_EVENT_OWNED;
+    }
+
+    return MK_PLUGIN_RET_EVENT_CONTINUE;
+}
+
+int _mkp_event_write(int socket)
+{
+    struct cgi_request *r = cgi_req_get(socket);
+    if (!r) return MK_PLUGIN_RET_EVENT_NEXT;
+
+    if (r->in_len > 0) {
+
+        mk_api->socket_cork_flag(socket, TCP_CORK_ON);
+
+        const char * const buf = r->in_buf, *outptr = r->in_buf;
+
+        mk_api->header_send(socket, r->cs, r->sr);
+        r->status_done = 1;
+        
+        mk_api->socket_cork_flag(socket, TCP_CORK_OFF);
+    }
+
+    return MK_PLUGIN_RET_EVENT_OWNED;
+}
+
+
+
+int _mkp_event_error(int socket)
+{
+    hangup(socket);
+}
+
+int _mkp_event_close(int socket)
+{
+    hangup(socket);
+}
+
