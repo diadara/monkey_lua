@@ -19,6 +19,13 @@
 
 #define __lua_pushmkptr(L, mk_ptr) lua_pushlstring(L, mk_ptr.data, mk_ptr.len)
 
+#define MK_LUA_OK 0
+#define MK_LUA_LOAD_ERROR 1
+#define MK_LUA_RUN_ERROR 2
+
+#define MK_LUA_DEBUG 1
+#define MK_LUA_NO_DEBUG 0
+
 enum {
     PATHLEN = 1024,
     SHORTLEN = 64
@@ -50,6 +57,9 @@ struct lua_request {
     int socket;
     int fd;
     lua_State *L;
+    const char *file;
+    int lua_status;
+    int debug;
     unsigned char status_done;
     unsigned char all_headers_done;
     unsigned char chunked;
@@ -57,7 +67,7 @@ struct lua_request {
 };
 
 
-lua_request *request_by_socket;
+struct lua_request *request_by_socket;
 
 int global_debug;
 
@@ -77,8 +87,12 @@ pthread_key_t lua_request_list;
 
 extern struct lua_request **requests_by_socket;
 
-struct cgi_request *lua_req_create(lua_State *L, int socket, struct session_request *sr,
-					struct client_session *cs);
+struct lua_request *lua_req_create(lua_State *L,
+                                   const char *file,
+                                   int socket,
+                                   struct session_request *sr,
+                                   struct client_session *cs,
+                                   int debug);
 
 
 void lua_req_add(struct lua_request *r);
@@ -98,7 +112,7 @@ static inline struct lua_request *lua_req_get_by_fd(int fd)
 {
     struct mk_list *list, *node;
     struct lua_request *r;
-
+    
     list = pthread_getspecific(lua_request_list);
     if (mk_list_is_empty(list) == 0)
         return NULL;

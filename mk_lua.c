@@ -24,6 +24,7 @@
 #include <string.h>
 #include <regex.h>
 #include <fcntl.h>
+#include <sys/resource.h>
 #include "MKPlugin.h"
 #include "mk_lua.h"
 
@@ -157,10 +158,74 @@ static void mk_lua_config(const char * path)
 
 
 
+
+void  Lua_excecution(void *req)
+{
+    struct lua_request *r = (struct lua_request*) req;
+    struct client_session *cs = r->cs;
+    struct session_request *sr = r->sr;
+    lua_State *L = r->L;
+    const char* file = r->file;
+
+    int status_load, status_run;
+    status_load = luaL_loadfile(L, file);
+    if (status_load != LUA_OK) {
+        mk_api->header_set_http_status(sr, 500);
+        // mk_api->header_send(cs->socket, cs, sr);
+        r->lua_status = MK_LUA_LOAD_ERROR;
+    }
+    else {
+        status_run = lua_pcall(L, 0, 0, lua_gettop(L) - 1);
+    }
+
+    if (status_run == LUA_OK) {
+        r->lua_status = MK_LUA_OK;
+        mk_lua_post_execute(L);
+    }
+    else {
+        r->lua_status = MK_LUA_RUN_ERROR;
+    }
+    
+
+}
+
+int do_lua(const char *const file,
+           struct session_request *const sr,
+           struct client_session *const cs,
+           struct plugin* const plugin,
+           int debug)
+{
+
+
+    lua_State *L = mk_lua_init_env(cs, sr); 
+    struct lua_request *r = lua_req_create(L, file, cs->socket, sr, cs, debug);
+
+    /* We have nothing to write yet */
+    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_SLEEP, MK_EPOLL_LEVEL_TRIGGERED);
+
+    if (r->sr->protocol >= MK_HTTP_PROTOCOL_11 &&
+        (r->sr->headers.status < MK_REDIR_MULTIPLE ||
+         r->sr->headers.status > MK_REDIR_USE_PROXY))
+    {
+        r->sr->headers.transfer_encoding = MK_HEADER_TE_TYPE_CHUNKED;
+        r->chunked = 1;
+    }
+
+
+    lua_req_add(r);
+    
+    mk_api->worker_spawn(Lua_excecution, r);
+
+    return 200;
+}
+
+
+
 int _mkp_init(struct plugin_api **api, char *confdir)
 {
     mk_api = *api;
-
+    struct rlimit lim;
+    
     mk_list_init(&lua_global_matches);
     mk_lua_config(confdir);
     pthread_key_create(&lua_request_list, NULL);
@@ -202,6 +267,7 @@ int _mkp_stage_30(struct plugin *plugin,
     UNUSED_VARIABLE(cs);
     UNUSED_VARIABLE(plugin);
     PLUGIN_TRACE("[FD %i] Handler received request in lua plugin");
+    int debug;
     unsigned int i;
     char url[PATHLEN];
     struct lua_match_t * match_rule;
@@ -254,8 +320,9 @@ int _mkp_stage_30(struct plugin *plugin,
     return MK_PLUGIN_RET_NOT_ME;
 
  run_lua:
+    debug = (global_debug || lua_vhosts[i].debug) ? MK_TRUE : MK_FALSE ;
 
-    int status = do_lua(file, sr, cs, plugin);
+    int status = do_lua(file, sr, cs, plugin, debug);
 
     /* These are just for the other plugins, such as logger; bogus data */
     mk_api->header_set_http_status(sr, status);
@@ -270,76 +337,23 @@ int _mkp_stage_30(struct plugin *plugin,
 }
 
 
-void * Lua_excecution(void *r)
-{
-    int status_load, status_run;
-    status_load = luaL_loadfile(L, file);
-    int status_load, status_run;
-    status_load = luaL_loadfile(L, file);
-    if (status_load != LUA_OK) {
-        mk_api->header_set_http_status(sr, 500);
-        mk_api->header_send(cs->socket, cs, sr);
-        if(global_debug || lua_vhosts[i].debug)
-            mk_lua_send(cs, sr, lua_tostring(L, -1));
-        goto cleanup;
-    }
-    else {
-        status_run = lua_pcall(L, 0, 0, lua_gettop(L) - 1);
-    }
-
-    if (status_run == LUA_OK) {
-        mk_lua_post_execute(L);
-    }
-    else {
-        mk_api->header_set_http_status(sr, 500);
-    }
-    
-    if (status_run == LUA_OK || (global_debug || lua_vhosts[i].debug))
-        {
-            char *header = NULL;
-            unsigned long int len;
-            mk_api->str_build(&header,
-                              &len,
-                              "Content-length : %d",
-                             (int)strlen(mk_lua_return));
-            mk_api->header_add(sr, header, len);
-            mk_api->header_send(cs->socket, cs, sr);
-            free(header);
-            mk_lua_send(cs, sr, mk_lua_return);
-        }
-
-
-
-}
-
-int do_lua(const char *const file,
-           struct session_request *const sr,
-           struct client_session *const cs,
-           struct plugin* const plugin)
-{
-
-
-    lua_State *L = mk_lua_init_env(cs, sr); 
-    lua_request *r = lua_req_create(L, cs->socket, sr, cs);
-    mk_api->worker_spawn(lua_excecution, r);
-
-    /* We have nothing to write yet */
-    mk_api->event_socket_change_mode(socket, MK_EPOLL_SLEEP, MK_EPOLL_LEVEL_TRIGGERED);
-
-    return 200;
-}
-
-struct lua_request *lua_req_create(lua_State *L, int socket, struct session_request *sr,
-					struct client_session *cs)
+struct lua_request *lua_req_create(lua_State *L,
+                                   const char *file,
+                                   int socket,
+                                   struct session_request *sr,
+                                   struct client_session *cs,
+                                   int debug)
 {
     struct lua_request *newlua = mk_api->mem_alloc_z(sizeof(struct lua_request));
     if (!newlua) return NULL;
 
     newlua->L = L;
+    newlua->file = file;
     newlua->socket = socket;
     newlua->sr = sr;
     newlua->cs = cs;
-
+    newlua->debug = debug;
+    
     return newlua;
 }
 
@@ -364,8 +378,9 @@ int lua_req_del(struct lua_request *r)
 
 static int hangup(const int socket)
 {
-
-  if ((r = cgi_req_get(socket))) {
+    struct lua_request* r;
+    
+    if ((r = lua_req_get(socket))) {
 
         /* If this was closed by us, do nothing */
         if (!requests_by_socket[r->socket])
@@ -385,9 +400,12 @@ static int hangup(const int socket)
 
 int _mkp_event_write(int socket)
 {
-    struct cgi_request *r = cgi_req_get(socket);
+    struct lua_request *r = lua_req_get(socket);
     if (!r) return MK_PLUGIN_RET_EVENT_NEXT;
-
+    
+    struct client_session *cs = r->cs;
+    struct session_request *sr = r->sr;
+ 
     if (r->in_len > 0) {
 
         mk_api->socket_cork_flag(socket, TCP_CORK_ON);
@@ -395,6 +413,25 @@ int _mkp_event_write(int socket)
         const char * const buf = r->in_buf, *outptr = r->in_buf;
 
         mk_api->header_send(socket, r->cs, r->sr);
+
+        if (r->debug)
+            {
+                char *header = NULL;
+                unsigned long int len;
+                mk_api->str_build(&header,
+                                  &len,
+                                  "Content-length : %d",
+                                  (int)strlen(mk_lua_return));
+                mk_api->header_add(sr, header, len);
+                mk_api->header_send(cs->socket, cs, sr);
+                free(header);
+                mk_lua_send(cs, sr, mk_lua_return);
+            }
+
+
+
+
+
         r->status_done = 1;
         
         mk_api->socket_cork_flag(socket, TCP_CORK_OFF);
@@ -407,11 +444,11 @@ int _mkp_event_write(int socket)
 
 int _mkp_event_error(int socket)
 {
-    hangup(socket);
+    return hangup(socket);
 }
 
 int _mkp_event_close(int socket)
 {
-    hangup(socket);
+    return hangup(socket);
 }
 
