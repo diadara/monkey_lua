@@ -53,6 +53,7 @@ struct lua_request {
     struct client_session *cs;
 
     unsigned int in_len;
+    char *buf;
     
     int socket;
     int fd;

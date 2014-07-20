@@ -44,4 +44,15 @@ static inline struct session_request* mk_lua_get_session_request(lua_State *L)
     return sr;
   }
 
+
+static inline struct lua_request* mk_lua_get_lua_request(lua_State *L)
+  {
+    lua_getglobal(L, "__mk_lua_req");
+    struct lua_request *r = lua_touserdata(L, -1);
+    if(!r)
+        printf("returned null!");
+    lua_pop(L, 1);
+    return r;
+  }
+
 #endif

@@ -20,8 +20,11 @@ char *mk_lua_return = NULL;
 
 static int mk_lua_print(lua_State *L)
 {
-    char *buf = luaL_checkstring(L, 1);
+    const char *buf = luaL_checkstring(L, 1);
     long unsigned int len;
+
+    struct lua_request *r =  mk_lua_get_lua_request(L);
+    char* mk_lua_return = r->buf;
     if (mk_lua_return) {
         char *temp = NULL;
         mk_api->str_build(&temp, &len, "%s\n%s", mk_lua_return, buf);
@@ -31,6 +34,8 @@ static int mk_lua_print(lua_State *L)
     else
         mk_lua_return = mk_api->str_dup(buf);
 
+    r->buf = mk_lua_return;
+    r->in_len = strlen(mk_lua_return);
     return 0;
 }
 

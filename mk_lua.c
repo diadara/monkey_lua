@@ -170,14 +170,12 @@ void  Lua_excecution(void *req)
     int status_load, status_run;
     status_load = luaL_loadfile(L, file);
     if (status_load != LUA_OK) {
-        mk_api->header_set_http_status(sr, 500);
-        // mk_api->header_send(cs->socket, cs, sr);
         r->lua_status = MK_LUA_LOAD_ERROR;
     }
     else {
         status_run = lua_pcall(L, 0, 0, lua_gettop(L) - 1);
     }
-
+    
     if (status_run == LUA_OK) {
         r->lua_status = MK_LUA_OK;
         mk_lua_post_execute(L);
@@ -186,7 +184,7 @@ void  Lua_excecution(void *req)
         r->lua_status = MK_LUA_RUN_ERROR;
     }
     
-
+    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WRITE, MK_EPOLL_LEVEL_TRIGGERED);
 }
 
 int do_lua(const char *const file,
@@ -200,22 +198,22 @@ int do_lua(const char *const file,
     lua_State *L = mk_lua_init_env(cs, sr); 
     struct lua_request *r = lua_req_create(L, file, cs->socket, sr, cs, debug);
 
+
     /* We have nothing to write yet */
-    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_SLEEP, MK_EPOLL_LEVEL_TRIGGERED);
+    mk_api->event_add(cs->socket, MK_EPOLL_SLEEP, plugin, MK_EPOLL_LEVEL_TRIGGERED);
 
     if (r->sr->protocol >= MK_HTTP_PROTOCOL_11 &&
         (r->sr->headers.status < MK_REDIR_MULTIPLE ||
          r->sr->headers.status > MK_REDIR_USE_PROXY))
-    {
-        r->sr->headers.transfer_encoding = MK_HEADER_TE_TYPE_CHUNKED;
-        r->chunked = 1;
-    }
+        {
+            r->sr->headers.transfer_encoding = MK_HEADER_TE_TYPE_CHUNKED;
+            r->chunked = 1;
+        }
 
 
     lua_req_add(r);
-    
     mk_api->worker_spawn(Lua_excecution, r);
-
+    
     return 200;
 }
 
@@ -352,8 +350,14 @@ struct lua_request *lua_req_create(lua_State *L,
     newlua->socket = socket;
     newlua->sr = sr;
     newlua->cs = cs;
+    newlua->buf = NULL;
+    newlua->in_len = 0;
     newlua->debug = debug;
-    
+    /* acesss the request structure from the lua_state instead of
+       creating an array to keep track of things */
+    lua_pushlightuserdata(L, (void *) newlua);
+    lua_setglobal(L, "__mk_lua_req");
+
     return newlua;
 }
 
@@ -405,37 +409,39 @@ int _mkp_event_write(int socket)
     
     struct client_session *cs = r->cs;
     struct session_request *sr = r->sr;
- 
-    if (r->in_len > 0) {
 
-        mk_api->socket_cork_flag(socket, TCP_CORK_ON);
-
-        const char * const buf = r->in_buf, *outptr = r->in_buf;
-
-        mk_api->header_send(socket, r->cs, r->sr);
-
-        if (r->debug)
-            {
-                char *header = NULL;
-                unsigned long int len;
-                mk_api->str_build(&header,
-                                  &len,
-                                  "Content-length : %d",
-                                  (int)strlen(mk_lua_return));
-                mk_api->header_add(sr, header, len);
-                mk_api->header_send(cs->socket, cs, sr);
-                free(header);
-                mk_lua_send(cs, sr, mk_lua_return);
-            }
-
-
-
-
-
-        r->status_done = 1;
+    if(r->lua_status != MK_LUA_OK)
+        mk_api->header_set_http_status(sr, 500);
+    
+    
+    mk_api->socket_cork_flag(socket, TCP_CORK_ON);
         
-        mk_api->socket_cork_flag(socket, TCP_CORK_OFF);
-    }
+    if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK)
+        {
+            char *header = NULL;
+            unsigned long int len;
+            mk_api->str_build(&header,
+                              &len,
+                              "Content-length : %d",
+                              (int)r->in_len);
+            mk_api->header_add(sr, header, len);
+            mk_api->header_send(cs->socket, cs, sr);
+            free(header);
+            mk_lua_send(cs, sr, r->buf);
+            r->status_done = 1;
+            mk_api->socket_cork_flag(socket, TCP_CORK_OFF);
+        }
+    else
+        {
+            char *header = "Content-length : 0";
+            mk_api->header_add(sr, header, 18);
+            mk_api->header_send(cs->socket, cs, sr);
+            r->status_done = 1;
+        }
+
+    mk_api->event_socket_change_mode(r->socket,
+                                     MK_EPOLL_SLEEP,
+                                     MK_EPOLL_LEVEL_TRIGGERED);
 
     return MK_PLUGIN_RET_EVENT_OWNED;
 }
