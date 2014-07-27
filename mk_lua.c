@@ -265,7 +265,7 @@ int _mkp_stage_30(struct plugin *plugin,
     UNUSED_VARIABLE(cs);
     UNUSED_VARIABLE(plugin);
     PLUGIN_TRACE("[FD %i] Handler received request in lua plugin");
-    int debug;
+    int debug = MK_FALSE;
     unsigned int i;
     char url[PATHLEN];
     struct lua_match_t * match_rule;
@@ -310,6 +310,7 @@ int _mkp_stage_30(struct plugin *plugin,
     mk_list_foreach(head_matches, &lua_vhosts[i].matches) {
         match_rule = mk_list_entry(head_matches, struct lua_match_t, _head);
         if (regexec(&match_rule->match, url, 0, NULL, 0) == 0) {
+            debug = lua_vhosts[i].debug;
             goto run_lua;
         }
     }
@@ -318,8 +319,9 @@ int _mkp_stage_30(struct plugin *plugin,
     return MK_PLUGIN_RET_NOT_ME;
 
  run_lua:
-    debug = (global_debug || lua_vhosts[i].debug) ? MK_TRUE : MK_FALSE ;
 
+    debug = (global_debug || debug) ? MK_TRUE : MK_FALSE ;
+  
     int status = do_lua(file, sr, cs, plugin, debug);
 
     /* These are just for the other plugins, such as logger; bogus data */
