@@ -11,4 +11,4 @@ OBJECTS = mk_lua.o mk_lua_env.o mk_lua_config.o mk_lua_request.o mk_lua_util.o m
 -include $(OBJECTS:.o=.d)
 
 monkey-lua.so: $(OBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(DEFS) -shared -o $@ $^ -lc
+	$(CC) $(CFLAGS) $(DEFS) -shared -o $@ $^ -lc $(LDFLAGS) 

@@ -25,7 +25,7 @@
 #include <regex.h>
 #include <fcntl.h>
 #include <sys/resource.h>
-#include "MKPlugin.h"
+#include "monkey/mk_api.h"
 #include "mk_lua.h"
 
 

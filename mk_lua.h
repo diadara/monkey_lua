@@ -8,7 +8,7 @@
 
 #include <lua.h>
 #include <lauxlib.h>
-#include "MKPlugin.h"
+#include "monkey/mk_api.h"
 
 #include "mk_lua_config.h"
 #include "mk_lua_util.h"
@@ -67,15 +67,11 @@ struct lua_request {
 
 };
 
-
-struct lua_request *request_by_socket;
-
 int global_debug;
 
 struct lua_vhost_t *lua_vhosts;
 struct mk_list lua_global_matches;
 
-extern char *mk_lua_return;
 
 lua_State * mk_lua_init_env(struct client_session *cs,
                             struct session_request *sr);
@@ -86,7 +82,7 @@ void mk_lua_post_execute(lua_State *L);
 
 pthread_key_t lua_request_list;
 
-extern struct lua_request **requests_by_socket;
+struct lua_request **requests_by_socket;
 
 struct lua_request *lua_req_create(lua_State *L,
                                    const char *file,
