@@ -91,5 +91,6 @@ lua_State * mk_lua_init_env(struct client_session *cs,
 void mk_lua_post_execute(lua_State *L)
 {
     mk_lua_set_response(L);
+    printf("hitting post excecute hook");
 }
 

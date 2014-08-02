@@ -174,9 +174,9 @@ mk.print(PrettyPrint(t2))
 mk.print(PrettyPrint(p1))
 mk.print(PrettyPrint(p2))
 
-mk.print(PrettyPrint(mk.cookies.get_cookies()))
+--mk.print(PrettyPrint(mk.cookies.get_cookies()))
 
-mk.cookies.set_cookie{name="name", value="nithin", httponly = true, secure=true, domain="monkey.com", expiry=os.time()+60*60*8}
+--mk.cookies.set_cookie{name="name", value="nithin", httponly = true, secure=true, domain="monkey.com", expiry=os.time()+60*60*8}
 
 a = "this is a string"
 

@@ -194,11 +194,13 @@ int do_lua(const char *const file,
            int debug)
 {
 
-
+    printf("hitting do lua");
     lua_State *L = mk_lua_init_env(cs, sr); 
     struct lua_request *r = lua_req_create(L, file, cs->socket, sr, cs, debug);
-
-
+    static int si = 1;
+    
+    printf("do lua called for the %d time\n", si);
+    si++;
     /* We have nothing to write yet */
     mk_api->event_add(cs->socket, MK_EPOLL_SLEEP, plugin, MK_EPOLL_LEVEL_TRIGGERED);
 
@@ -212,8 +214,8 @@ int do_lua(const char *const file,
 
 
     lua_req_add(r);
-    mk_api->worker_spawn(Lua_excecution, r);
-    
+    //mk_api->worker_spawn(Lua_excecution, r);
+    Lua_excecution(r);
     return 200;
 }
 
@@ -405,6 +407,7 @@ static int hangup(const int socket)
 
 int _mkp_event_write(int socket)
 {
+    printf("plugin ready to write");
     struct lua_request *r = lua_req_get(socket);
     if (!r) return MK_PLUGIN_RET_EVENT_NEXT;
     
@@ -417,27 +420,19 @@ int _mkp_event_write(int socket)
     
  
         
-    if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK)
-        {
-            char *header = NULL;
-            unsigned long int len;
-            mk_api->str_build(&header,
-                              &len,
-                              "Content-length : %d",
-                              (int)r->in_len);
-            mk_api->header_add(sr, header, len);
-            mk_api->header_send(cs->socket, cs, sr);
-            free(header);
-            mk_lua_send(cs, sr, r->buf);
-            r->status_done = 1;
-
-        }
-    else
-        {
-            sr->headers.content_length = 0;
-            mk_api->header_send(cs->socket, cs, sr);
-            r->status_done = 1;
-        }
+    if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK) {
+        
+        sr->headers.content_length = (int)r->in_len;
+        mk_api->header_send(cs->socket, cs, sr);
+        mk_lua_send(cs, sr, r->buf);
+        r->status_done = 1;
+        
+    }
+    else {
+        sr->headers.content_length = 0;
+        mk_api->header_send(cs->socket, cs, sr);
+        r->status_done = 1;
+    }
 
     mk_api->event_socket_change_mode(r->socket,
                                      MK_EPOLL_SLEEP,
