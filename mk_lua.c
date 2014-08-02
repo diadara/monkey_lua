@@ -251,7 +251,6 @@ void mk_lua_send(struct client_session *cs,
                  const char * buffer) {
     UNUSED_VARIABLE(sr);
     int ret_len = strlen(buffer);
-    fcntl(cs->socket, F_SETFL, fcntl(cs->socket, F_GETFL, 0) & ~O_NONBLOCK);
     mk_api->socket_set_nonblocking(cs->socket);
     mk_api->socket_send(cs->socket, buffer, ret_len);
 
@@ -416,7 +415,7 @@ int _mkp_event_write(int socket)
         mk_api->header_set_http_status(sr, 500);
     
     
-    mk_api->socket_cork_flag(socket, TCP_CORK_ON);
+ 
         
     if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK)
         {
@@ -431,12 +430,11 @@ int _mkp_event_write(int socket)
             free(header);
             mk_lua_send(cs, sr, r->buf);
             r->status_done = 1;
-            mk_api->socket_cork_flag(socket, TCP_CORK_OFF);
+
         }
     else
         {
-            char *header = "Content-length : 0";
-            mk_api->header_add(sr, header, 18);
+            sr->headers.content_length = 0;
             mk_api->header_send(cs->socket, cs, sr);
             r->status_done = 1;
         }
