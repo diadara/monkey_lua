@@ -123,6 +123,8 @@ static inline struct lua_request *lua_req_get_by_fd(int fd)
     return NULL;
 }
 
+
+void mk_lua_write(struct lua_request *r);
 #endif
 
 

@@ -159,7 +159,7 @@ static void mk_lua_config(const char * path)
 
 
 
-void  Lua_excecution(void *req)
+void  Lua_execution(void *req)
 {
     struct lua_request *r = (struct lua_request*) req;
     struct client_session *cs = r->cs;
@@ -184,7 +184,7 @@ void  Lua_excecution(void *req)
         r->lua_status = MK_LUA_RUN_ERROR;
     }
     
-    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WRITE, MK_EPOLL_LEVEL_TRIGGERED);
+    mk_lua_write(r);
 }
 
 int do_lua(const char *const file,
@@ -200,19 +200,17 @@ int do_lua(const char *const file,
 
 
     /* We have nothing to write yet */
-    mk_api->event_add(cs->socket, MK_EPOLL_SLEEP, plugin, MK_EPOLL_LEVEL_TRIGGERED);
+    //    mk_api->event_add(cs->socket, MK_EPOLL_SLEEP, plugin, MK_EPOLL_LEVEL_TRIGGERED);
 
-    if (r->sr->protocol >= MK_HTTP_PROTOCOL_11 &&
-        (r->sr->headers.status < MK_REDIR_MULTIPLE ||
-         r->sr->headers.status > MK_REDIR_USE_PROXY))
-        {
-            r->sr->headers.transfer_encoding = MK_HEADER_TE_TYPE_CHUNKED;
-            r->chunked = 1;
-        }
+    /* if (r->sr->protocol >= MK_HTTP_PROTOCOL_11 && */
+    /*     (r->sr->headers.status < MK_REDIR_MULTIPLE || */
+    /*      r->sr->headers.status > MK_REDIR_USE_PROXY)) */
+    /*     { */
+    /*         r->sr->headers.transfer_encoding = MK_HEADER_TE_TYPE_CHUNKED; */
+    /*         r->chunked = 1; */
+    /*     } */
 
-
-    lua_req_add(r);
-    mk_api->worker_spawn(Lua_excecution, r);
+    Lua_execution(r);
     
     return 200;
 }
@@ -226,32 +224,20 @@ int _mkp_init(struct plugin_api **api, char *confdir)
     
     mk_list_init(&lua_global_matches);
     mk_lua_config(confdir);
-    pthread_key_create(&lua_request_list, NULL);
-    getrlimit(RLIMIT_NOFILE, &lim);
-    requests_by_socket = mk_api->mem_alloc_z(sizeof(struct lua_request *) * lim.rlim_cur);
-
     return 0;
 }
 
 void _mkp_exit()
 {
-    mk_api->mem_free(requests_by_socket);
+
 }
 
-void _mkp_core_thctx(void)
-{
-    struct mk_list *list = mk_api->mem_alloc_z(sizeof(struct mk_list));
-
-    mk_list_init(list);
-    pthread_setspecific(lua_request_list, (void *) list);
-}
 
 void mk_lua_send(struct client_session *cs,
                  struct session_request *sr,
                  const char * buffer) {
     UNUSED_VARIABLE(sr);
     int ret_len = strlen(buffer);
-    mk_api->socket_set_nonblocking(cs->socket);
     mk_api->socket_send(cs->socket, buffer, ret_len);
 
 }
@@ -322,15 +308,7 @@ int _mkp_stage_30(struct plugin *plugin,
     debug = (global_debug || debug) ? MK_TRUE : MK_FALSE ;
   
     int status = do_lua(file, sr, cs, plugin, debug);
-
-    /* These are just for the other plugins, such as logger; bogus data */
-    mk_api->header_set_http_status(sr, status);
-
-    if (status != 200)
-        return MK_PLUGIN_RET_CLOSE_CONX;
-
-    sr->headers.cgi = SH_CGI;
-
+    
     return MK_PLUGIN_RET_CONTINUE;
 
 }
@@ -362,61 +340,17 @@ struct lua_request *lua_req_create(lua_State *L,
     return newlua;
 }
 
-void lua_req_add(struct lua_request *r)
+void mk_lua_write(struct lua_request *r)
 {
-    struct mk_list *list = pthread_getspecific(lua_request_list);
 
-    mk_bug(!list);
-    mk_list_add(&r->_head, list);
-}
-
-int lua_req_del(struct lua_request *r)
-{
-    if (!r) return 1;
-
-    mk_list_del(&r->_head);
-    mk_api->mem_free(r);
-
-    return 0;
-}
-
-
-static int hangup(const int socket)
-{
-    struct lua_request* r;
-    
-    if ((r = lua_req_get(socket))) {
-
-        /* If this was closed by us, do nothing */
-        if (!requests_by_socket[r->socket])
-            return MK_PLUGIN_RET_EVENT_OWNED;
-
-
-        /* XXX Fixme: this needs to be atomic */
-        requests_by_socket[r->socket] = NULL;
-
-        lua_req_del(r);
-
-        return MK_PLUGIN_RET_EVENT_OWNED;
-    }
-
-    return MK_PLUGIN_RET_EVENT_CONTINUE;
-}
-
-int _mkp_event_write(int socket)
-{
-    struct lua_request *r = lua_req_get(socket);
-    if (!r) return MK_PLUGIN_RET_EVENT_NEXT;
-    
     struct client_session *cs = r->cs;
     struct session_request *sr = r->sr;
 
     if(r->lua_status != MK_LUA_OK)
         mk_api->header_set_http_status(sr, 500);
-    
-    
- 
-        
+
+
+    fcntl(cs->socket, F_SETFL, fcntl(cs->socket, F_GETFL, 0) & ~O_NONBLOCK);
     if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK)
         {
             char *header = NULL;
@@ -439,22 +373,7 @@ int _mkp_event_write(int socket)
             r->status_done = 1;
         }
 
-    mk_api->event_socket_change_mode(r->socket,
-                                     MK_EPOLL_SLEEP,
-                                     MK_EPOLL_LEVEL_TRIGGERED);
-
-    return MK_PLUGIN_RET_EVENT_OWNED;
+    mk_api->socket_set_nonblocking(cs->socket);
 }
 
-
-
-int _mkp_event_error(int socket)
-{
-    return hangup(socket);
-}
-
-int _mkp_event_close(int socket)
-{
-    return hangup(socket);
-}
 
