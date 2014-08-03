@@ -8,7 +8,7 @@
 
 #include <lua.h>
 #include <lauxlib.h>
-#include "MKPlugin.h"
+#include "monkey/mk_api.h"
 
 #include "mk_lua_config.h"
 #include "mk_lua_util.h"

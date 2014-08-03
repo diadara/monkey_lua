@@ -24,7 +24,6 @@
 #include <string.h>
 #include <regex.h>
 #include <fcntl.h>
-#include "MKPlugin.h"
 #include "mk_lua.h"
 
 
@@ -177,8 +176,8 @@ void mk_lua_send(struct client_session *cs,
     UNUSED_VARIABLE(sr);
     int ret_len = strlen(buffer);
     fcntl(cs->socket, F_SETFL, fcntl(cs->socket, F_GETFL, 0) & ~O_NONBLOCK);
-    mk_api->socket_set_nonblocking(cs->socket);
     mk_api->socket_send(cs->socket, buffer, ret_len);
+    mk_api->socket_set_nonblocking(cs->socket);
 
 }
 
@@ -245,8 +244,7 @@ int _mkp_stage_30(struct plugin *plugin,
     /* sets up the api, the traceback function is at the top of the stack */
     lua_State *L = mk_lua_init_env(cs, sr); 
 
-    FILE *f = fopen("/home/diadara/projects/monkey-p/monkey/plugins/lua/output.txt","w");
-    fprintf(f, "request received for %s\n", file);
+
 
     int status_load, status_run;
 
@@ -263,8 +261,7 @@ int _mkp_stage_30(struct plugin *plugin,
     }
 
 
-    fprintf(f,"\n%s\n", mk_lua_return);
-    fclose(f);
+
 
     if (status_run == LUA_OK) {
         mk_lua_post_execute(L);
