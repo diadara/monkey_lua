@@ -32,129 +32,127 @@ Usage
 The plugin exposes a table `mk` through which you can get the request
 object and also set the response.
 
-## mk.print
+### mk.print
 
 mk.print takes a string and prints it one the response body.
 
 
 
-## mk.config
+### mk.config
 config table contains information about monkey server and the current configuration. This table consists of-
 
-### kernel_features
+#### kernel_features
     This table consists of 3 boolean fields TCP_FASTOPEN, SO_REUSEPORT, TCP_AUTOCORKING.
 
-### worker_capacity
+#### worker_capacity
 Monkey servers current worker capacity.
 
-### workers
+#### workers
 Number of running workers.
 
-### max_load
+#### max_load
 Maximum load that can be handled by the server currently.
 
-### manual_tcp_cork
+#### manual_tcp_cork
 Boolean indicating whether manual_tcp_cork.
 
-### fdt
+#### fdt
 Boolean indicating whether fdt enabled.
 
-### is_daemon
+#### is_daemon
 Boolean indicating whether monkey running in daemon mode.
 
-### is_seteuid
+#### is_seteuid
 Boolean indicating whether seteuid.
 
-### scheduler_mode
+#### scheduler_mode
 String indicating the current scheduler algorithm.
 
-### server_config
+#### server_config
 Current  server configuration.
 
-### listen_addr
+#### listen_addr
 Current server listen address.
 
-### server_addr
+#### server_addr
 Current server address.
 
-### server_software
+#### server_software
 Current server software string.
 
-### user
+#### user
 Username under which server is running.
 
-### user_dir
+#### user_dir
 current user directory.
 
-### pid_file_path
+#### pid_file_path
 PID file path
 
-### server_conf_file
+#### server_conf_file
 Server configuration file.
 
-### mimes_conf_file
+#### mimes_conf_file
 Mimetypes configuration file.
 
-### plugin_load_conf_file
+#### plugin_load_conf_file
 Plugin load configuration file.
 
-### sites_conf_dir
+#### sites_conf_dir
 Sites configuration directory
 
-### plugins_conf_dir
+#### plugins_conf_dir
 Plugin configuration directory
 
-### transport
+#### transport
 Current transport (http/https).
 
-### transport_layer
+#### transport_layer
 Current transport layer.
 
-
-
-## mk.request
+### mk.request
 Request table consists of following items:
 
-### server_software
+#### server_software
 Server software string.
 
-### document_root
+#### document_root
 Document root for the current request
 
-### server_name
+#### server_name
 Server name for the current request.
 
-### server_addr
+#### server_addr
 Current server address.
 
-### server_port
+#### server_port
 Current server port.
 
-### script_filename
+#### script_filename
 Script file name for the current request.
 
-### request_method
+#### request_method
 Current request method.
 
-### remote_addr
+#### remote_addr
 client address.
 
-### remote port
+#### remote port
 client port.
 
-### request_uri
+#### request_uri
 Request url for the current request.
 
-### query string
+#### query string
 query string
 
-### data
+#### data
 `POST` or `PUT` data.
 
-### headers
+#### headers
 Table with the http headers from the current request.
 
-### parseargs()
+#### parseargs()
 
 Function which parses the query string and returns two tables one with
 keys as the query string variable and value as it's value and other
@@ -163,7 +161,7 @@ an array of variable values.
 
     t1, t2 = parseargs()
 
-### parsedata()
+#### parsedata()
 
 Function which parses the post data and returns two tables
 
@@ -171,25 +169,25 @@ Function which parses the post data and returns two tables
 
 
 
-## mk.response
+### mk.response
 Response table consists of following items:
 
-### status
+#### status
 Set this variable to current request response status code. Default value set to 200.
 
-### headers
+#### headers
 Set http headers with this table
 
     headers["Content-type"] = "text/json"
 
     
-## mk.cookies
+### mk.cookies
 The cookie table consists of following items.
 
-### get_cookies()
+#### get_cookies()
 The function returns a table of cookies the client has sent.
 
-### mk.set_cookie()
+#### mk.set_cookie()
 The function takes a table as argument and sets the cookie accordingly.
 
     cookies.set_cookie{name="name", value="nithin", httponly = true, secure=true, domain="nithinsaji.in", expiry=os.time()+60*60*8}
