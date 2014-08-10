@@ -263,7 +263,10 @@ void mk_lua_inject_request(lua_State *L)
     
     __lua_pushmkptr(L, sr->data);
     lua_setfield(L, -2, "data");
-      
+
+    lua_newtable(L);
+    // headers table
+    
     strcpy(buffer, "HTTP_");
 
     for (i = 0; i < (unsigned int)sr->headers_toc.length; i++) {
@@ -291,6 +294,8 @@ void mk_lua_inject_request(lua_State *L)
         lua_settable(L,-3);
     }
 
+    lua_setfield(L, -2, "headers")
+    
     lua_pushcfunction(L, mk_lua_query_to_table);
     lua_setfield(L, -2, "parseargs");
 
