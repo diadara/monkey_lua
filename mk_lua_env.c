@@ -59,7 +59,7 @@ static int mk_lua_traceback(lua_State *L)
 
 
 
-int mk_lua_init_worker_env(mk_lua_worker_ctx * ctx)
+int mk_lua_init_worker_env(struct mk_lua_worker_ctx * ctx)
 {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);

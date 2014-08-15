@@ -89,7 +89,7 @@ void mk_lua_post_execute(lua_State *L);
 
 pthread_key_t lua_request_list;
 
-pthread_key_t mk_lua_worker_ctx;
+pthread_key_t mk_lua_worker_ctx_key;
 
 
 

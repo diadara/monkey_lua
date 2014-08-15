@@ -226,7 +226,11 @@ int _mkp_init(struct plugin_api **api, char *confdir)
     
     mk_list_init(&lua_global_matches);
     mk_lua_config(confdir);
+
     pthread_key_create(&lua_request_list, NULL);
+    
+    pthread_key_create(&mk_lua_worker_ctx_key, NULL);
+    
     getrlimit(RLIMIT_NOFILE, &lim);
     requests_by_socket = mk_api->mem_alloc_z(sizeof(struct lua_request *) * lim.rlim_cur);
 
@@ -248,8 +252,9 @@ void _mkp_core_thctx(void)
     mk_list_init(list);
 
     pthread_setspecific(lua_request_list, (void *) list);
-    pthread_setspecific(mk_lua_worker_ctx, (void *) worker_ctx);
+    pthread_setspecific(mk_lua_worker_ctx_key, (void *) worker_ctx);
 }
+
 
 void mk_lua_send(struct client_session *cs,
                  struct session_request *sr,
