@@ -294,7 +294,7 @@ void mk_lua_inject_request(lua_State *L)
         lua_settable(L,-3);
     }
 
-    lua_setfield(L, -2, "headers")
+    lua_setfield(L, -2, "headers");
     
     lua_pushcfunction(L, mk_lua_query_to_table);
     lua_setfield(L, -2, "parseargs");
