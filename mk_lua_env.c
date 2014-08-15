@@ -57,6 +57,29 @@ static int mk_lua_traceback(lua_State *L)
     return 1;
 }
 
+
+
+int mk_lua_init_worker_env(mk_lua_worker_ctx * ctx)
+{
+    lua_State *L = luaL_newstate();
+    luaL_openlibs(L);
+    lua_pushcfunction(L, mk_lua_traceback);
+
+    /* Register these functions */
+    static const struct luaL_Reg mk_lua_lib []  ={
+        {"print", mk_lua_print},
+        {NULL, NULL}
+    };
+    
+    luaL_newlib(L, mk_lua_lib); /* registers all the functions */
+    mk_lua_inject_config(L);
+
+    lua_setglobal(L,"mk");
+
+    ctx->L = L;
+    return 0;
+}
+
 lua_State * mk_lua_init_env(struct client_session *cs,
                             struct session_request *sr)
 {
@@ -86,6 +109,7 @@ lua_State * mk_lua_init_env(struct client_session *cs,
 
     return L;
 }
+
 
 
 void mk_lua_post_execute(lua_State *L)

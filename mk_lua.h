@@ -43,7 +43,12 @@ struct lua_vhost_t {
     int debug;
 };
 
+struct mk_lua_worker_ctx {
 
+    lua_State *L;
+    
+};
+    
 struct lua_request {
 
     char in_buf[PATHLEN];
@@ -67,6 +72,8 @@ struct lua_request {
 
 };
 
+
+
 int global_debug;
 
 struct lua_vhost_t *lua_vhosts;
@@ -81,6 +88,10 @@ void mk_lua_post_execute(lua_State *L);
 
 
 pthread_key_t lua_request_list;
+
+pthread_key_t mk_lua_worker_ctx;
+
+
 
 struct lua_request **requests_by_socket;
 

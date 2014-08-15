@@ -242,8 +242,13 @@ void _mkp_core_thctx(void)
 {
     struct mk_list *list = mk_api->mem_alloc_z(sizeof(struct mk_list));
 
+    struct mk_lua_worker_ctx * worker_ctx = mk_api->mem_alloc_z(sizeof(struct mk_lua_worker_ctx));
+
+    mk_lua_init_worker_env(worker_ctx);
     mk_list_init(list);
+
     pthread_setspecific(lua_request_list, (void *) list);
+    pthread_setspecific(mk_lua_worker_ctx, (void *) worker_ctx);
 }
 
 void mk_lua_send(struct client_session *cs,
@@ -381,27 +386,6 @@ int lua_req_del(struct lua_request *r)
 }
 
 
-static int hangup(const int socket)
-{
-    struct lua_request* r;
-    
-    if ((r = lua_req_get(socket))) {
-
-        /* If this was closed by us, do nothing */
-        if (!requests_by_socket[r->socket])
-            return MK_PLUGIN_RET_EVENT_OWNED;
-
-
-        /* XXX Fixme: this needs to be atomic */
-        requests_by_socket[r->socket] = NULL;
-
-        lua_req_del(r);
-
-        return MK_PLUGIN_RET_EVENT_OWNED;
-    }
-
-    return MK_PLUGIN_RET_EVENT_CONTINUE;
-}
 
 int _mkp_event_write(int socket)
 {
@@ -446,15 +430,4 @@ int _mkp_event_write(int socket)
     return MK_PLUGIN_RET_EVENT_OWNED;
 }
 
-
-
-int _mkp_event_error(int socket)
-{
-    return hangup(socket);
-}
-
-int _mkp_event_close(int socket)
-{
-    return hangup(socket);
-}
 
