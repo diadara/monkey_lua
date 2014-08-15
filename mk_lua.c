@@ -326,18 +326,19 @@ int _mkp_stage_30(struct plugin *plugin,
 
     debug = (global_debug || debug) ? MK_TRUE : MK_FALSE ;
   
-    int status = do_lua(file, sr, cs, plugin, debug);
+    /* int status = do_lua(file, sr, cs, plugin, debug); */
 
-    /* These are just for the other plugins, such as logger; bogus data */
-    mk_api->header_set_http_status(sr, status);
+    /* /\* These are just for the other plugins, such as logger; bogus data *\/ */
+    /* mk_api->header_set_http_status(sr, status); */
 
-    if (status != 200)
-        return MK_PLUGIN_RET_CLOSE_CONX;
+    /* if (status != 200) */
+    /*     return MK_PLUGIN_RET_CLOSE_CONX; */
 
-    sr->headers.cgi = SH_CGI;
+    /* sr->headers.cgi = SH_CGI; */
 
-    return MK_PLUGIN_RET_CONTINUE;
+    /* return MK_PLUGIN_RET_CONTINUE; */
 
+    return MK_PLUGIN_RET_CLOSE_CONX;
 }
 
 
@@ -375,6 +376,7 @@ void lua_req_add(struct lua_request *r)
     mk_list_add(&r->_head, list);
 }
 
+
 int lua_req_del(struct lua_request *r)
 {
     if (!r) return 1;
@@ -398,8 +400,6 @@ int _mkp_event_write(int socket)
     if(r->lua_status != MK_LUA_OK)
         mk_api->header_set_http_status(sr, 500);
     
-    
- 
         
     if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK)
         {
