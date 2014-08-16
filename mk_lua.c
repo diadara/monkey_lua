@@ -32,7 +32,7 @@
 MONKEY_PLUGIN("lua",              /* shortname */
               "Lua scripting support plugin",    /* name */
               VERSION,             /* version */
-              MK_PLUGIN_STAGE_30); /* hooks */
+              MK_PLUGIN_STAGE_30 | MK_PLUGIN_CORE_THCTX); /* hooks */
 
 
 
@@ -161,31 +161,32 @@ static void mk_lua_config(const char * path)
 
 void  Lua_excecution(void *req)
 {
-    struct lua_request *r = (struct lua_request*) req;
-    struct client_session *cs = r->cs;
-    struct session_request *sr = r->sr;
-    lua_State *L = r->L;
-    const char* file = r->file;
+    /* struct lua_request *r = (struct lua_request*) req; */
+    /* struct client_session *cs = r->cs; */
+    /* struct session_request *sr = r->sr; */
+    /* lua_State *L = r->L; */
+    /* const char* file = r->file; */
 
-    int status_load, status_run;
-    status_load = luaL_loadfile(L, file);
-    if (status_load != LUA_OK) {
-        r->lua_status = MK_LUA_LOAD_ERROR;
-    }
-    else {
-        status_run = lua_pcall(L, 0, 0, lua_gettop(L) - 1);
-    }
+    /* int status_load, status_run; */
+    /* status_load = luaL_loadfile(L, file); */
+    /* if (status_load != LUA_OK) { */
+    /*     r->lua_status = MK_LUA_LOAD_ERROR; */
+    /* } */
+    /* else { */
+    /*     status_run = lua_pcall(L, 0, 0, lua_gettop(L) - 1); */
+    /* } */
     
-    if (status_run == LUA_OK) {
-        r->lua_status = MK_LUA_OK;
-        mk_lua_post_execute(L);
-    }
-    else {
-        r->lua_status = MK_LUA_RUN_ERROR;
-    }
+    /* if (status_run == LUA_OK) { */
+    /*     r->lua_status = MK_LUA_OK; */
+    /*     mk_lua_post_execute(L); */
+    /* } */
+    /* else { */
+    /*     r->lua_status = MK_LUA_RUN_ERROR; */
+    /* } */
     
-    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WRITE, MK_EPOLL_LEVEL_TRIGGERED);
+    /* mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WRITE, MK_EPOLL_LEVEL_TRIGGERED); */
 }
+
 
 int do_lua(const char *const file,
            struct session_request *const sr,
@@ -194,25 +195,32 @@ int do_lua(const char *const file,
            int debug)
 {
 
+    struct mk_lua_worker_ctx * ctx = pthread_getspecific(mk_lua_worker_ctx_key);
+    lua_State *L = ctx->L;
+    lua_State *co = lua_newthread(L);
+    
+    struct lua_request *r = lua_req_create(co, file, cs->socket, sr, cs, debug);
 
-    lua_State *L = mk_lua_init_env(cs, sr); 
-    struct lua_request *r = lua_req_create(L, file, cs->socket, sr, cs, debug);
 
 
     /* We have nothing to write yet */
-    mk_api->event_add(cs->socket, MK_EPOLL_SLEEP, plugin, MK_EPOLL_LEVEL_TRIGGERED);
+    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_SLEEP,  MK_EPOLL_LEVEL_TRIGGERED);
 
-    if (r->sr->protocol >= MK_HTTP_PROTOCOL_11 &&
-        (r->sr->headers.status < MK_REDIR_MULTIPLE ||
-         r->sr->headers.status > MK_REDIR_USE_PROXY))
-        {
-            r->sr->headers.transfer_encoding = MK_HEADER_TE_TYPE_CHUNKED;
-            r->chunked = 1;
-        }
+    /* Wake up the socket once we have data to write */
+    //    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WAKEUP,  MK_EPOLL_LEVEL_TRIGGERED);
+    // mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WAKEUP,  MK_EPOLL_LEVEL_TRIGGERED);
+
+    /* if (r->sr->protocol >= MK_HTTP_PROTOCOL_11 && */
+    /*     (r->sr->headers.status < MK_REDIR_MULTIPLE || */
+    /*      r->sr->headers.status > MK_REDIR_USE_PROXY)) */
+    /*     { */
+    /*         r->sr->headers.transfer_encoding = MK_HEADER_TE_TYPE_CHUNKED; */
+    /*         r->chunked = 1; */
+    /*     } */
 
 
     lua_req_add(r);
-    mk_api->worker_spawn(Lua_excecution, r);
+    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WAKEUP,  MK_EPOLL_LEVEL_TRIGGERED);
     
     return 200;
 }
@@ -261,7 +269,7 @@ void mk_lua_send(struct client_session *cs,
                  const char * buffer) {
     UNUSED_VARIABLE(sr);
     int ret_len = strlen(buffer);
-    mk_api->socket_set_nonblocking(cs->socket);
+    //    mk_api->socket_set_nonblocking(cs->socket);
     mk_api->socket_send(cs->socket, buffer, ret_len);
 
 }
@@ -271,6 +279,7 @@ int _mkp_stage_30(struct plugin *plugin,
                   struct client_session *cs,
                   struct session_request *sr)
 {
+
     UNUSED_VARIABLE(cs);
     UNUSED_VARIABLE(plugin);
     PLUGIN_TRACE("[FD %i] Handler received request in lua plugin");
@@ -331,7 +340,7 @@ int _mkp_stage_30(struct plugin *plugin,
 
     debug = (global_debug || debug) ? MK_TRUE : MK_FALSE ;
   
-    /* int status = do_lua(file, sr, cs, plugin, debug); */
+    int status = do_lua(file, sr, cs, plugin, debug); 
 
     /* /\* These are just for the other plugins, such as logger; bogus data *\/ */
     /* mk_api->header_set_http_status(sr, status); */
@@ -341,13 +350,14 @@ int _mkp_stage_30(struct plugin *plugin,
 
     /* sr->headers.cgi = SH_CGI; */
 
-    /* return MK_PLUGIN_RET_CONTINUE; */
+        return MK_PLUGIN_RET_CONTINUE;
 
-    return MK_PLUGIN_RET_CLOSE_CONX;
+        //    return MK_PLUGIN_RET_CLOSE_CONX;
+    
 }
 
 
-struct lua_request *lua_req_create(lua_State *L,
+struct lua_request *lua_req_create(lua_State *co,
                                    const char *file,
                                    int socket,
                                    struct session_request *sr,
@@ -357,7 +367,7 @@ struct lua_request *lua_req_create(lua_State *L,
     struct lua_request *newlua = mk_api->mem_alloc_z(sizeof(struct lua_request));
     if (!newlua) return NULL;
 
-    newlua->L = L;
+    newlua->co = co;
     newlua->file = file;
     newlua->socket = socket;
     newlua->sr = sr;
@@ -367,8 +377,8 @@ struct lua_request *lua_req_create(lua_State *L,
     newlua->debug = debug;
     /* acesss the request structure from the lua_state instead of
        creating an array to keep track of things */
-    lua_pushlightuserdata(L, (void *) newlua);
-    lua_setglobal(L, "__mk_lua_req");
+    lua_pushlightuserdata(co, (void *) newlua);
+    lua_setglobal(co, "__mk_lua_req");
 
     return newlua;
 }
@@ -376,9 +386,10 @@ struct lua_request *lua_req_create(lua_State *L,
 void lua_req_add(struct lua_request *r)
 {
     struct mk_list *list = pthread_getspecific(lua_request_list);
-
     mk_bug(!list);
     mk_list_add(&r->_head, list);
+    requests_by_socket[r->socket] = r;
+    MK_TRACE("[FD %i] adding request to lua request array", r->socket);
 }
 
 
@@ -397,42 +408,53 @@ int lua_req_del(struct lua_request *r)
 int _mkp_event_write(int socket)
 {
     struct lua_request *r = lua_req_get(socket);
-    if (!r) return MK_PLUGIN_RET_EVENT_NEXT;
+    if (!r) {
+        return MK_PLUGIN_RET_EVENT_NEXT;
+    }
+    
+
     
     struct client_session *cs = r->cs;
     struct session_request *sr = r->sr;
+    
+    mk_api->header_set_http_status(sr, 200);
+    sr->headers.content_length = strlen("Hello World");
+    mk_api->header_send(cs->socket, cs, sr);
+    mk_lua_send(cs, sr, "Hello World");
 
-    if(r->lua_status != MK_LUA_OK)
-        mk_api->header_set_http_status(sr, 500);
+    mk_api->event_socket_change_mode(socket, MK_EPOLL_SLEEP, MK_EPOLL_LEVEL_TRIGGERED);
+    mk_api->event_socket_change_mode(socket, MK_EPOLL_READ, MK_EPOLL_LEVEL_TRIGGERED);
+    /* if(r->lua_status != MK_LUA_OK) */
+    /*     mk_api->header_set_http_status(sr, 500); */
     
         
-    if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK)
-        {
-            char *header = NULL;
-            unsigned long int len;
-            mk_api->str_build(&header,
-                              &len,
-                              "Content-length : %d",
-                              (int)r->in_len);
-            mk_api->header_add(sr, header, len);
-            mk_api->header_send(cs->socket, cs, sr);
-            free(header);
-            mk_lua_send(cs, sr, r->buf);
-            r->status_done = 1;
+    /* if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK) */
+    /*     { */
+    /*         char *header = NULL; */
+    /*         unsigned long int len; */
+    /*         mk_api->str_build(&header, */
+    /*                           &len, */
+    /*                           "Content-length : %d", */
+    /*                           (int)r->in_len); */
+    /*         mk_api->header_add(sr, header, len); */
+    /*         mk_api->header_send(cs->socket, cs, sr); */
+    /*         free(header); */
+    /*         mk_lua_send(cs, sr, r->buf); */
+    /*         r->status_done = 1; */
 
-        }
-    else
-        {
-            sr->headers.content_length = 0;
-            mk_api->header_send(cs->socket, cs, sr);
-            r->status_done = 1;
-        }
+    /*     } */
+    /* else */
+    /*     { */
+    /*         sr->headers.content_length = 0; */
+    /*         mk_api->header_send(cs->socket, cs, sr); */
+    /*         r->status_done = 1; */
+    /*     } */
 
-    mk_api->event_socket_change_mode(r->socket,
-                                     MK_EPOLL_SLEEP,
-                                     MK_EPOLL_LEVEL_TRIGGERED);
+    /* mk_api->event_socket_change_mode(r->socket, */
+    /*                                  MK_EPOLL_SLEEP, */
+    /*                                  MK_EPOLL_LEVEL_TRIGGERED); */
 
-    return MK_PLUGIN_RET_EVENT_OWNED;
+        return MK_PLUGIN_RET_EVENT_OWNED;
 }
 
 

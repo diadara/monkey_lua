@@ -62,7 +62,7 @@ struct lua_request {
     
     int socket;
     int fd;
-    lua_State *L;
+    lua_State *co;
     const char *file;
     int lua_status;
     int debug;
@@ -109,8 +109,8 @@ int lua_req_del(struct lua_request *r);
 // Get the LUA request by the client socket
 static inline struct lua_request *lua_req_get(int socket)
 {
+    MK_TRACE("[FD %i] looking up request", socket);
     struct lua_request *r = requests_by_socket[socket];
-
     return r;
 }
 
