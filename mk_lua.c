@@ -234,8 +234,6 @@ int _mkp_init(struct plugin_api **api, char *confdir)
     
     mk_list_init(&lua_global_matches);
     mk_lua_config(confdir);
-
-    pthread_key_create(&lua_request_list, NULL);
     
     pthread_key_create(&mk_lua_worker_ctx_key, NULL);
     
@@ -252,14 +250,9 @@ void _mkp_exit()
 
 void _mkp_core_thctx(void)
 {
-    struct mk_list *list = mk_api->mem_alloc_z(sizeof(struct mk_list));
-
     struct mk_lua_worker_ctx * worker_ctx = mk_api->mem_alloc_z(sizeof(struct mk_lua_worker_ctx));
 
     mk_lua_init_worker_env(worker_ctx);
-    mk_list_init(list);
-
-    pthread_setspecific(lua_request_list, (void *) list);
     pthread_setspecific(mk_lua_worker_ctx_key, (void *) worker_ctx);
 }
 
@@ -385,21 +378,15 @@ struct lua_request *lua_req_create(lua_State *co,
 
 void lua_req_add(struct lua_request *r)
 {
-    struct mk_list *list = pthread_getspecific(lua_request_list);
-    mk_bug(!list);
-    mk_list_add(&r->_head, list);
     requests_by_socket[r->socket] = r;
     MK_TRACE("[FD %i] adding request to lua request array", r->socket);
 }
 
 
-int lua_req_del(struct lua_request *r)
+int lua_req_del(struct lua_request *r, int socket)
 {
-    if (!r) return 1;
-
-    mk_list_del(&r->_head);
     mk_api->mem_free(r);
-
+    requests_by_socket[socket] = NULL;
     return 0;
 }
 
@@ -422,6 +409,8 @@ int _mkp_event_write(int socket)
     mk_api->header_send(cs->socket, cs, sr);
     mk_lua_send(cs, sr, "Hello World");
 
+    lua_req_del(r, socket);
+  
     mk_api->event_socket_change_mode(socket, MK_EPOLL_SLEEP, MK_EPOLL_LEVEL_TRIGGERED);
     mk_api->event_socket_change_mode(socket, MK_EPOLL_READ, MK_EPOLL_LEVEL_TRIGGERED);
     /* if(r->lua_status != MK_LUA_OK) */
@@ -454,6 +443,7 @@ int _mkp_event_write(int socket)
     /*                                  MK_EPOLL_SLEEP, */
     /*                                  MK_EPOLL_LEVEL_TRIGGERED); */
 
+    
         return MK_PLUGIN_RET_EVENT_OWNED;
 }
 

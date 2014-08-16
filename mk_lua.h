@@ -104,7 +104,7 @@ struct lua_request *lua_req_create(lua_State *L,
 
 
 void lua_req_add(struct lua_request *r);
-int lua_req_del(struct lua_request *r);
+int lua_req_del(struct lua_request *r, int socket);
 
 // Get the LUA request by the client socket
 static inline struct lua_request *lua_req_get(int socket)
