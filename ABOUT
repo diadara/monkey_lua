@@ -1,2 +1,4 @@
 Lua scripting support to monkey server
 ======================================
+Aims to provide non blocking lua execution environment for Monkey
+Server.
