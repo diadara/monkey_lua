@@ -80,8 +80,11 @@ struct lua_vhost_t *lua_vhosts;
 struct mk_list lua_global_matches;
 
 
-lua_State * mk_lua_init_env(struct client_session *cs,
-                            struct session_request *sr);
+
+lua_State * mk_lua_init_request_env(lua_State* L,
+                                    struct client_session *cs,
+                                    struct session_request *sr);
+int mk_lua_init_worker_env(struct mk_lua_worker_ctx * ctx);
 void mk_lua_post_execute(lua_State *L);
 
 

@@ -252,7 +252,8 @@ int do_lua(const char *const file,
     struct mk_lua_worker_ctx * ctx = pthread_getspecific(mk_lua_worker_ctx_key);
     lua_State *L = ctx->L;
     lua_State *co = lua_newthread(L);
-
+    
+    mk_lua_init_request_env(co, cs, sr);
     
     struct lua_request *r = lua_req_create(co, file, cs->socket, sr, cs, debug);
 
