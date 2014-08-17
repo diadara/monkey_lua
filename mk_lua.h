@@ -119,6 +119,8 @@ static inline struct lua_State* mk_lua_get_lua_vm()
     return vm;
 }
 
+void mk_lua_printc(struct lua_request *r, char *buf);
+
 #endif
 
 

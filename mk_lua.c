@@ -157,7 +157,58 @@ static void mk_lua_config(const char * path)
     
 }
 
+void mk_lua_printc(struct lua_request *r, char *buf)
+{
+    int len;
+    char* mk_lua_return = r->buf;
+    if (mk_lua_return) {
+        char *temp = NULL;
+        mk_api->str_build(&temp, &len, "%s\n%s", mk_lua_return, buf);
+        mk_api->mem_free(mk_lua_return);
+        mk_lua_return = temp;
+    }
+    else
+        mk_lua_return = mk_api->str_dup(buf);
 
+    r->buf = mk_lua_return;
+    r->in_len = strlen(mk_lua_return);
+
+}
+
+void mk_lua_resume_execution(struct lua_request *r)
+{
+    lua_State *vm = mk_lua_get_lua_vm();
+    
+    int status_run = lua_resume(r->co, vm, 0);
+    
+    if (status_run == LUA_OK) {
+        /* the script has finished execution.*/
+        r->lua_status = MK_LUA_OK;
+        
+        mk_lua_post_execute(r->co);
+
+        
+        /* We are ready to wrte the response */
+        mk_api->event_socket_change_mode(r->socket, MK_EPOLL_WRITE, MK_EPOLL_LEVEL_TRIGGERED);
+    }
+    else if (status_run == LUA_YIELD) {
+
+        MK_TRACE("[FD %i] Script has yielded control to event loop", r->socket);
+        
+        /* TODO get the fd for the blocking call and register it
+           with monkey even loop, create a maping for the request
+           to the file discriptor. When the blocking calls state
+           changes, resume the coroutine */
+        
+    }
+    else {
+        r->lua_status = MK_LUA_RUN_ERROR;
+        MK_TRACE("[FD %i] lua script %s failed to execute successfully", r->socket, r->file);
+        printf("Error:  %s\n", lua_tostring(r->co, -1));
+        free(r->buf);
+        r->buf = mk_api->str_dup(lua_tolstring(r->co, -1, &r->in_len));
+    }
+}
 
 
 void  mk_lua_process_request(void *req)
@@ -180,21 +231,14 @@ void  mk_lua_process_request(void *req)
 
     if (status_load != LUA_OK) {
         r->lua_status = MK_LUA_LOAD_ERROR;
+        
     }
+    else {
+        mk_lua_resume_execution(r);
+    }
+    
 
-    else {
-        status_run = lua_resume(co, vm, 0);
-    }
-    
-    if (status_run == LUA_OK) {
-        r->lua_status = MK_LUA_OK;
-        mk_lua_post_execute(co);
-    }
-    else {
-        r->lua_status = MK_LUA_RUN_ERROR;
-    }
-    
-    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WRITE, MK_EPOLL_LEVEL_TRIGGERED);
+   
 }
 
 
@@ -208,6 +252,7 @@ int do_lua(const char *const file,
     struct mk_lua_worker_ctx * ctx = pthread_getspecific(mk_lua_worker_ctx_key);
     lua_State *L = ctx->L;
     lua_State *co = lua_newthread(L);
+
     
     struct lua_request *r = lua_req_create(co, file, cs->socket, sr, cs, debug);
 
@@ -419,53 +464,47 @@ int _mkp_event_write(int socket)
     if (!r) {
         return MK_PLUGIN_RET_EVENT_NEXT;
     }
-    
 
-    
+
+    printf("about to write the response for the request");
     struct client_session *cs = r->cs;
     struct session_request *sr = r->sr;
     
-    mk_api->header_set_http_status(sr, 200);
-    sr->headers.content_length = strlen("Hello World");
-    mk_api->header_send(cs->socket, cs, sr);
-    mk_lua_send(cs, sr, "Hello World");
+    /* mk_api->header_set_http_status(sr, 200); */
+    /* sr->headers.content_length = strlen("Hello World"); */
+    /* mk_api->header_send(cs->socket, cs, sr); */
+    /* mk_lua_send(cs, sr, "Hello World"); */
+
+
+  
+    if(r->lua_status != MK_LUA_OK) {
+        mk_api->header_set_http_status(sr, 500);
+        MK_TRACE("[FD %i] script failed to execute", r->socket);
+    }
+    
+    if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK) {
+
+        sr->headers.content_length = (int)r->in_len;
+        mk_api->header_send(cs->socket, cs, sr);
+        mk_lua_send(cs, sr, r->buf);
+
+        printf("response: %s", r->buf);
+    }
+    else
+        {
+            printf("don't know");
+            sr->headers.content_length = 0;
+            mk_api->header_send(cs->socket, cs, sr);
+        }
+
 
     lua_req_del(r, socket);
-  
+
     mk_api->event_socket_change_mode(socket, MK_EPOLL_SLEEP, MK_EPOLL_LEVEL_TRIGGERED);
     mk_api->event_socket_change_mode(socket, MK_EPOLL_READ, MK_EPOLL_LEVEL_TRIGGERED);
-    /* if(r->lua_status != MK_LUA_OK) */
-    /*     mk_api->header_set_http_status(sr, 500); */
-    
-        
-    /* if (((r->lua_status == MK_LUA_RUN_ERROR) && r->debug) || r->lua_status == MK_LUA_OK) */
-    /*     { */
-    /*         char *header = NULL; */
-    /*         unsigned long int len; */
-    /*         mk_api->str_build(&header, */
-    /*                           &len, */
-    /*                           "Content-length : %d", */
-    /*                           (int)r->in_len); */
-    /*         mk_api->header_add(sr, header, len); */
-    /*         mk_api->header_send(cs->socket, cs, sr); */
-    /*         free(header); */
-    /*         mk_lua_send(cs, sr, r->buf); */
-    /*         r->status_done = 1; */
 
-    /*     } */
-    /* else */
-    /*     { */
-    /*         sr->headers.content_length = 0; */
-    /*         mk_api->header_send(cs->socket, cs, sr); */
-    /*         r->status_done = 1; */
-    /*     } */
 
-    /* mk_api->event_socket_change_mode(r->socket, */
-    /*                                  MK_EPOLL_SLEEP, */
-    /*                                  MK_EPOLL_LEVEL_TRIGGERED); */
-
-    
-        return MK_PLUGIN_RET_EVENT_OWNED;
+    return MK_PLUGIN_RET_EVENT_OWNED;
 }
 
 

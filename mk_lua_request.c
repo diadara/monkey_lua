@@ -139,6 +139,8 @@ void mk_lua_inject_response(lua_State *L)
     lua_newtable(L);
     lua_newtable(L);
     lua_setfield(L, -2, "headers");
+    lua_pushnumber(L, 200);
+    lua_setfield(L, -2, "status");
     lua_setfield(L, -2, "response"); /* initialising response table */
 }
 
