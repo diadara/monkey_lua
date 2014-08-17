@@ -86,10 +86,7 @@ void mk_lua_post_execute(lua_State *L);
 
 
 
-
-pthread_key_t lua_request_list;
-
-pthread_key_t mk_lua_worker_ctx_key;
+extern pthread_key_t mk_lua_worker_ctx_key;
 
 
 
@@ -115,23 +112,11 @@ static inline struct lua_request *lua_req_get(int socket)
 }
 
 
-// Get the LUA request by the LUA app's fd
-static inline struct lua_request *lua_req_get_by_fd(int fd)
+static inline struct lua_State* mk_lua_get_lua_vm()
 {
-    struct mk_list *list, *node;
-    struct lua_request *r;
-    
-    list = pthread_getspecific(lua_request_list);
-    if (mk_list_is_empty(list) == 0)
-        return NULL;
-
-    mk_list_foreach(node, list) {
-        r = mk_list_entry(node, struct lua_request, _head);
-        if (r->fd == fd)
-            return r;
-    }
-
-    return NULL;
+    struct mk_lua_worker_ctx * ctx = pthread_getspecific(mk_lua_worker_ctx_key);
+    lua_State *vm =  ctx->L;
+    return vm;
 }
 
 #endif

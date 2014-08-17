@@ -35,6 +35,7 @@ MONKEY_PLUGIN("lua",              /* shortname */
               MK_PLUGIN_STAGE_30 | MK_PLUGIN_CORE_THCTX); /* hooks */
 
 
+pthread_key_t mk_lua_worker_ctx_key;
 
 static void str_to_regex(char *str, regex_t *reg) /* taken from cgi plugin */
 {
@@ -159,32 +160,41 @@ static void mk_lua_config(const char * path)
 
 
 
-void  Lua_excecution(void *req)
+void  mk_lua_process_request(void *req)
 {
-    /* struct lua_request *r = (struct lua_request*) req; */
-    /* struct client_session *cs = r->cs; */
-    /* struct session_request *sr = r->sr; */
-    /* lua_State *L = r->L; */
-    /* const char* file = r->file; */
+    struct lua_request *r = (struct lua_request*) req;
+    struct client_session *cs = r->cs;
+    struct session_request *sr = r->sr;
 
-    /* int status_load, status_run; */
-    /* status_load = luaL_loadfile(L, file); */
-    /* if (status_load != LUA_OK) { */
-    /*     r->lua_status = MK_LUA_LOAD_ERROR; */
-    /* } */
-    /* else { */
-    /*     status_run = lua_pcall(L, 0, 0, lua_gettop(L) - 1); */
-    /* } */
+    lua_State *co = r->co;
+    lua_State *vm = mk_lua_get_lua_vm();
     
-    /* if (status_run == LUA_OK) { */
-    /*     r->lua_status = MK_LUA_OK; */
-    /*     mk_lua_post_execute(L); */
-    /* } */
-    /* else { */
-    /*     r->lua_status = MK_LUA_RUN_ERROR; */
-    /* } */
+    const char* file = r->file;
+
+    int status_load, status_run;
+
+    /* TODO isolate the coroutine from vm and prevent it from
+       manipulating the global vm */
     
-    /* mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WRITE, MK_EPOLL_LEVEL_TRIGGERED); */
+    status_load = luaL_loadfile(co, file);
+
+    if (status_load != LUA_OK) {
+        r->lua_status = MK_LUA_LOAD_ERROR;
+    }
+
+    else {
+        status_run = lua_resume(co, vm, 0);
+    }
+    
+    if (status_run == LUA_OK) {
+        r->lua_status = MK_LUA_OK;
+        mk_lua_post_execute(co);
+    }
+    else {
+        r->lua_status = MK_LUA_RUN_ERROR;
+    }
+    
+    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WRITE, MK_EPOLL_LEVEL_TRIGGERED);
 }
 
 
@@ -201,14 +211,19 @@ int do_lua(const char *const file,
     
     struct lua_request *r = lua_req_create(co, file, cs->socket, sr, cs, debug);
 
-
+    
 
     /* We have nothing to write yet */
     mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_SLEEP,  MK_EPOLL_LEVEL_TRIGGERED);
 
+
+    
     /* Wake up the socket once we have data to write */
     //    mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WAKEUP,  MK_EPOLL_LEVEL_TRIGGERED);
     // mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WAKEUP,  MK_EPOLL_LEVEL_TRIGGERED);
+
+
+    /* deal with chunking the response later */
 
     /* if (r->sr->protocol >= MK_HTTP_PROTOCOL_11 && */
     /*     (r->sr->headers.status < MK_REDIR_MULTIPLE || */
@@ -218,8 +233,14 @@ int do_lua(const char *const file,
     /*         r->chunked = 1; */
     /*     } */
 
-
+    
+    /* add request to the processing list */
     lua_req_add(r);
+
+    /* start processing the request */
+    mk_lua_process_request(r);
+    
+    /* wakeup socket */
     mk_api->event_socket_change_mode(cs->socket, MK_EPOLL_WAKEUP,  MK_EPOLL_LEVEL_TRIGGERED);
     
     return 200;
